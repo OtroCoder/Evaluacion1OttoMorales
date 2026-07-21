@@ -8,42 +8,241 @@
 # variables, estructuras de datos, control de flujo, funciones,
 # programación funcional y programación orientada a objetos (POO).
 #
+# Características de robustez incorporadas en esta versión:
+#   - Manejo controlado de excepciones (ValueError, ZeroDivisionError, Exception)
+#   - Validación y saneamiento de entradas de texto (longitud, caracteres)
+#   - Tooltips de ayuda (parámetro help=) en todos los campos
+#   - Formato monetario peruano es_PE: S/ 1,500.75 (Ley N.º 30381: símbolo "S/")
+#   - Identidad visual con paleta corporativa y logo embebido (sin depender
+#     de internet ni de archivos externos)
+#
 # Para ejecutarla localmente:
 #     streamlit run app.py
 # =============================================================================
 
-# --- Importación de librerías ---
+# --- Importación de librerías base ---
 # streamlit : framework para construir la interfaz web interactiva
 # pandas    : manejo de tablas de datos (DataFrame)
 # numpy     : manejo de arreglos numéricos (arrays)
+import base64
+import html
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 
-# --- Importación de las librerías externas del proyecto ---
-# De la librería de funciones usamos calcular_wacc (área financiera).
-# De la librería de clases usamos ProyectoInversion (VPN, ROI y Payback).
-from libreria_funciones_proyecto1 import calcular_wacc
-from libreria_clases_proyecto1 import ProyectoInversion
-
 # =============================================================================
 # CONFIGURACIÓN GENERAL DE LA PÁGINA
+# (debe ser la primera llamada a Streamlit del script)
 # =============================================================================
 st.set_page_config(
     page_title="Proyecto 1 - Otto Morales",
-    page_icon="🐍",
+    page_icon="💡",
     layout="wide"
 )
 
 # =============================================================================
+# IMPORTACIÓN SEGURA DE LAS LIBRERÍAS EXTERNAS DEL PROYECTO
+# -----------------------------------------------------------------------------
+# Si alguno de los archivos del curso no está junto a app.py, la aplicación
+# se detiene con un mensaje claro en lugar de mostrar un traceback crudo.
+# =============================================================================
+try:
+    from libreria_funciones_proyecto1 import calcular_wacc
+    from libreria_clases_proyecto1 import ProyectoInversion
+except ImportError as error_importacion:
+    st.error(
+        "🚫 **No se pudieron cargar las librerías del proyecto.** "
+        "Verifica que `libreria_funciones_proyecto1.py` y "
+        "`libreria_clases_proyecto1.py` estén en la misma carpeta que `app.py`. "
+        f"\n\nDetalle técnico: `{error_importacion}`"
+    )
+    st.stop()
+
+# =============================================================================
+# CONSTANTES DE LA APLICACIÓN
+# =============================================================================
+PALETA = {
+    "fondo": "#fbfbfb",       # gris casi blanco (fondo general)
+    "turquesa": "#0ad9d8",    # acento positivo / métricas
+    "naranja_oscuro": "#cf480e",
+    "naranja": "#f17507",     # color principal de marca
+    "navy": "#092c4d",        # azul marino (textos y sidebar)
+}
+
+MAX_CARACTERES_TEXTO = 60          # longitud máxima de conceptos y nombres
+MAX_REGISTROS_HISTORICO = 100      # tope del histórico WACC (evita crecer sin fin)
+MAX_MONTO = 1_000_000_000_000.0    # tope de montos (1 billón de soles)
+
+# Logo corporativo embebido en base64 (autocontenido: no requiere internet
+# ni archivos externos para renderizar la identidad visual).
+LOGO_BASE64 = "iVBORw0KGgoAAAANSUhEUgAABDgAAAQ4CAMAAADbzpy9AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAKJQTFRFzkgN+9zC+LmG9ZZK8nwc/vbw9qho/OXR+sqk84Ur/e3h9I0797B3+cKV+9Oz9Z9Z5qOG2nZK0VMc9t3R/PTw+ejh11MN4I1o6GgN89HC4F4N12o71F8r7bqk6a+V3YFZ8Maz5Jh35GMN73AN1VAN6msN0EsN7W4N3VsN5mYN0k0N21gN4mAN2VUN8rqV4W8r5IpZ5oxZ2Fwc34RZ8XMN////ucFbVQAAADZ0Uk5T//////////////////////////////////////////////////////////////////////8AoY9OMQAALNdJREFUeNrs3eli20aCqFFhIbiTkm1tluUla3cnPXeD3//VrmQ7iSlLtggUUAXgnF/TMz1xLEAfawN48hHgSCd+BIBwAMIBCAcgHIBwAAgHIByAcADCAQgHgHAAwgEIByAcgHAACAcgHIBwAMIBCAcgHADCAQgHIByAcADCASAcgHAAwgEIByAcAMIBCAcgHIBwAMIBIByAcADCAQgHIByAcAAIByAcgHAAwgEIB4BwAMIBCAcgHIBwAAgHIByAcADCAQgHgHAAwgEIByAcgHAAwgEgHIBwAMIBCAcgHADCAQgHIByAcADCASAcgHAAwgEIByAcAMIBCAcgHIBwAMIBCAeAcADCAQgHIByAcAAIByAcgHAAwgEIB4BwAMIBCAcgHIBwAMIBIByAcADCAQgHIBwAwgEIByAcgHAAwgEgHIBwAMIBCAcgHADCAQgHIByAcADCAQgHgHAAwgEIByAcgHAACAcgHIBwAMIBCAeAcADCAQgHIByAcAAIByAcgHAAwgEIByAcAMIBCAcgHIBwAMIBIByAcADCAQgHIBwAwgEIByAcgHAAwgEgHIBwAMIBCAcgHIBwAAgHIByAcADCAQgHgHAAwgEIByAcgHAACAcgHIBwAMIBCAcgHADCAQgHPVpld/LPquIvX/4Xi/v/o58RwsG9LFvk+V0f6mdaFsUmz7Ns5kcnHEzPPMs3z8/F4wmp7sYhAiIcTMEs226KZR3OXT+yuZ+rcDDaacliU5R1N4pqa/QhHIytGdtqXXduuc8toAoHo7Da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"
+
+
+# =============================================================================
+# FUNCIONES UTILITARIAS (formato es_PE, saneamiento y estilos)
+# =============================================================================
+def formatear_moneda(valor: float) -> str:
+    """
+    Formatea un monto según la convención oficial peruana (locale es_PE):
+    separador de miles con coma y decimal con punto -> S/ 1,500.75
+    El símbolo oficial del sol es "S/" (Ley N.º 30381, año 2015).
+    """
+    try:
+        return f"S/ {float(valor):,.2f}"
+    except (TypeError, ValueError):
+        return "S/ —"
+
+
+def formatear_numero(valor: float, decimales: int = 2) -> str:
+    """Formatea un número genérico con miles (,) y decimales (.) según es_PE."""
+    try:
+        return f"{float(valor):,.{decimales}f}"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def limpiar_texto(texto: str) -> str:
+    """
+    Sanea una entrada de texto del usuario:
+    - recorta espacios en los extremos y colapsa espacios múltiples
+    - escapa caracteres HTML y neutraliza símbolos de Markdown,
+      evitando inyección de formato en los mensajes de la interfaz
+    """
+    limpio = " ".join(str(texto).split())
+    limpio = html.escape(limpio)
+    for simbolo in ("*", "_", "`", "#", "[", "]", ">"):
+        limpio = limpio.replace(simbolo, "")
+    return limpio.strip()
+
+
+def mostrar_logo(ancho: int = 220) -> None:
+    """Muestra el logo corporativo embebido (base64) con el ancho indicado."""
+    try:
+        st.image(base64.b64decode(LOGO_BASE64), width=ancho)
+    except Exception:
+        # Si por alguna razón el logo no decodifica, la app sigue funcionando.
+        st.markdown("### 💡")
+
+
+def inyectar_estilos() -> None:
+    """
+    Inyecta el CSS de identidad visual (HTML moderno dentro de app.py):
+    paleta corporativa, tarjetas con sombra suave, botones con degradado
+    y sidebar en azul marino.
+    """
+    st.markdown(
+        f"""
+        <style>
+        /* ---------- Fondo general y tipografía ---------- */
+        .stApp {{
+            background-color: {PALETA['fondo']};
+        }}
+        h1, h2, h3 {{
+            color: {PALETA['navy']} !important;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }}
+
+        /* ---------- Sidebar en azul marino ---------- */
+        [data-testid="stSidebar"] {{
+            background: linear-gradient(180deg, {PALETA['navy']} 0%, #0d3a63 100%);
+        }}
+        [data-testid="stSidebar"] * {{
+            color: #ffffff !important;
+        }}
+        [data-testid="stSidebar"] [data-baseweb="select"] * {{
+            color: {PALETA['navy']} !important;
+        }}
+
+        /* ---------- Botones: degradado naranja de marca ---------- */
+        .stButton > button {{
+            background: linear-gradient(90deg, {PALETA['naranja']} 0%, {PALETA['naranja_oscuro']} 100%);
+            color: #ffffff;
+            border: none;
+            border-radius: 10px;
+            padding: 0.55rem 1.2rem;
+            font-weight: 600;
+            transition: transform .12s ease, box-shadow .12s ease;
+            box-shadow: 0 2px 8px rgba(241, 117, 7, 0.35);
+        }}
+        .stButton > button:hover {{
+            transform: translateY(-1px);
+            box-shadow: 0 4px 14px rgba(207, 72, 14, 0.45);
+            color: #ffffff;
+        }}
+
+        /* ---------- Métricas como tarjetas ---------- */
+        [data-testid="stMetric"] {{
+            background: #ffffff;
+            border: 1px solid #eceff3;
+            border-left: 5px solid {PALETA['turquesa']};
+            border-radius: 12px;
+            padding: 14px 18px;
+            box-shadow: 0 2px 10px rgba(9, 44, 77, 0.06);
+        }}
+        [data-testid="stMetricLabel"] {{
+            color: {PALETA['navy']};
+            font-weight: 600;
+        }}
+        [data-testid="stMetricValue"] {{
+            color: {PALETA['navy']};
+        }}
+
+        /* ---------- Pestañas (CRUD) ---------- */
+        .stTabs [data-baseweb="tab"] {{
+            font-weight: 600;
+            color: {PALETA['navy']};
+        }}
+        .stTabs [aria-selected="true"] {{
+            color: {PALETA['naranja_oscuro']} !important;
+            border-bottom-color: {PALETA['naranja']} !important;
+        }}
+
+        /* ---------- Tarjeta de presentación (Home) ---------- */
+        .tarjeta-home {{
+            background: #ffffff;
+            border: 1px solid #eceff3;
+            border-radius: 16px;
+            padding: 26px 30px;
+            box-shadow: 0 4px 18px rgba(9, 44, 77, 0.08);
+        }}
+        .tarjeta-home table {{ width: 100%; border-collapse: collapse; }}
+        .tarjeta-home td {{
+            padding: 7px 4px;
+            border-bottom: 1px solid #f0f2f5;
+            color: {PALETA['navy']};
+        }}
+        .tarjeta-home td.campo {{ font-weight: 700; width: 34%; }}
+        .banda-marca {{
+            height: 6px;
+            border-radius: 6px;
+            margin: 6px 0 18px 0;
+            background: linear-gradient(90deg,
+                {PALETA['navy']} 0%, {PALETA['turquesa']} 35%,
+                {PALETA['naranja']} 70%, {PALETA['naranja_oscuro']} 100%);
+        }}
+        .pie-pagina {{
+            text-align: center;
+            color: {PALETA['navy']};
+            opacity: .65;
+            font-size: .85rem;
+            margin-top: 30px;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# =============================================================================
 # INICIALIZACIÓN DEL ESTADO DE LA SESIÓN (st.session_state)
 # -----------------------------------------------------------------------------
-# Streamlit vuelve a ejecutar todo el script cada vez que el usuario
-# interactúa con un widget. Para que los datos NO se pierdan entre
-# interacciones, se guardan en st.session_state.
+# Streamlit vuelve a ejecutar todo el script con cada interacción; los datos
+# se preservan entre interacciones guardándolos en st.session_state.
 # =============================================================================
 
-# Ejercicio 1: lista vacía donde se registran los movimientos del flujo de caja
+# Ejercicio 1: lista de movimientos del flujo de caja
 if "movimientos" not in st.session_state:
     st.session_state.movimientos = []
 
@@ -59,21 +258,26 @@ if "arr_productos" not in st.session_state:
 if "historico_wacc" not in st.session_state:
     st.session_state.historico_wacc = []
 
-# Ejercicio 4: diccionario de proyectos de inversión para el CRUD
-# La clave es el nombre del proyecto y el valor es un objeto ProyectoInversion
+# Ejercicio 4: diccionario {nombre_proyecto: objeto ProyectoInversion}
 if "proyectos" not in st.session_state:
     st.session_state.proyectos = {}
+
+# Los estilos se inyectan una sola vez por ejecución del script
+inyectar_estilos()
 
 # =============================================================================
 # MENÚ LATERAL DE NAVEGACIÓN
 # =============================================================================
-st.sidebar.title("📌 Navegación")
-seccion = st.sidebar.selectbox(
-    "Selecciona una sección:",
-    ["Home", "Ejercicio 1", "Ejercicio 2", "Ejercicio 3", "Ejercicio 4"]
-)
-st.sidebar.markdown("---")
-st.sidebar.caption("Proyecto 1 · Otto Morales Gómez · 2026")
+with st.sidebar:
+    mostrar_logo(ancho=120)
+    st.title("📌 Navegación")
+    seccion = st.selectbox(
+        "Selecciona una sección:",
+        ["Home", "Ejercicio 1", "Ejercicio 2", "Ejercicio 3", "Ejercicio 4"],
+        help="Cada sección corresponde a un ejercicio del Módulo 1."
+    )
+    st.markdown("---")
+    st.caption("Proyecto 1 · Otto Morales Gómez · 2026")
 
 
 # =============================================================================
@@ -81,31 +285,32 @@ st.sidebar.caption("Proyecto 1 · Otto Morales Gómez · 2026")
 # =============================================================================
 def mostrar_home():
     """Muestra la página de presentación del proyecto."""
-    st.title("🐍 Proyecto 1 - Aplicación Interactiva en Streamlit")
+    st.title("Proyecto 1 - Aplicación Interactiva en Streamlit")
+    st.markdown('<div class="banda-marca"></div>', unsafe_allow_html=True)
     st.subheader("Especialización Python for Analytics")
 
     col_izq, col_der = st.columns([1, 2])
 
     with col_izq:
-        # Logo de Python (imagen representativa del proyecto)
-        st.image(
-            "https://www.python.org/static/community_logos/python-logo-generic.svg",
-            width=280
-        )
+        mostrar_logo(ancho=240)
 
     with col_der:
-        st.markdown("""
-        ### 👨‍💼 Información del estudiante
-
-        | Campo | Detalle |
-        |---|---|
-        | **Nombre** | Otto Morales Gómez |
-        | **Módulo** | Módulo 1 - Python Fundamentals |
-        | **Curso** | Especialización Python for Analytics |
-        | **Perfil** | Ingeniero y MBA |
-        | **País** | Perú 🇵🇪 |
-        | **Año** | 2026 |
-        """)
+        st.markdown(
+            """
+            <div class="tarjeta-home">
+              <h3 style="margin-top:0;">👨‍💼 Información del estudiante</h3>
+              <table>
+                <tr><td class="campo">Nombre</td><td>Otto Morales Gómez</td></tr>
+                <tr><td class="campo">Módulo</td><td>Módulo 1 - Python Fundamentals</td></tr>
+                <tr><td class="campo">Curso</td><td>Especialización Python for Analytics</td></tr>
+                <tr><td class="campo">Perfil</td><td>Ingeniero y MBA</td></tr>
+                <tr><td class="campo">País</td><td>Perú 🇵🇪</td></tr>
+                <tr><td class="campo">Año</td><td>2026</td></tr>
+              </table>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     st.markdown("---")
 
@@ -117,6 +322,9 @@ def mostrar_home():
     programación funcional y programación orientada a objetos (POO)**,
     presentados en una interfaz interactiva desarrollada con Streamlit.
 
+    Los montos se expresan en soles con el formato oficial peruano
+    (**es_PE**): `S/ 1,500.75`.
+
     ### 🧩 Secciones de la aplicación
 
     - **Ejercicio 1:** Flujo de caja con listas.
@@ -126,10 +334,7 @@ def mostrar_home():
 
     ### 🛠️ Tecnologías utilizadas
 
-    - Python 3
-    - Streamlit
-    - Pandas
-    - NumPy
+    - Python 3 · Streamlit · Pandas · NumPy
     """)
 
 
@@ -139,6 +344,7 @@ def mostrar_home():
 def mostrar_ejercicio1():
     """Registra ingresos y gastos en una lista y calcula el saldo final."""
     st.title("💰 Ejercicio 1 - Flujo de caja con listas")
+    st.markdown('<div class="banda-marca"></div>', unsafe_allow_html=True)
 
     st.markdown("""
     **Descripción:** este módulo registra movimientos financieros
@@ -151,59 +357,85 @@ def mostrar_ejercicio1():
     # --- Formulario de ingreso de datos ---
     col1, col2, col3 = st.columns(3)
     with col1:
-        concepto = st.text_input("Concepto del movimiento", placeholder="Ej: Venta de servicios")
+        concepto = st.text_input(
+            "Concepto del movimiento",
+            placeholder="Ej: Venta de servicios",
+            max_chars=MAX_CARACTERES_TEXTO,
+            help="Descripción breve del movimiento (máx. 60 caracteres)."
+        )
     with col2:
-        tipo = st.selectbox("Tipo de movimiento", ["Ingreso", "Gasto"])
+        tipo = st.selectbox(
+            "Tipo de movimiento",
+            ["Ingreso", "Gasto"],
+            help="Ingreso: entrada de dinero. Gasto: salida de dinero."
+        )
     with col3:
-        valor = st.number_input("Valor (S/.)", min_value=0.0, step=10.0, format="%.2f")
+        valor = st.number_input(
+            "Valor (S/)",
+            min_value=0.0,
+            max_value=MAX_MONTO,
+            step=10.0,
+            format="%.2f",
+            help="Monto en soles, mayor a cero. Formato es_PE: S/ 1,500.75"
+        )
 
     # --- Botón para agregar el movimiento a la lista ---
     if st.button("➕ Agregar movimiento"):
-        # Validación: el concepto no puede estar vacío y el valor debe ser mayor a cero
-        if concepto.strip() == "":
-            st.error("⚠️ Debes ingresar un concepto.")
+        concepto_limpio = limpiar_texto(concepto)
+        # Validación: concepto no vacío y valor mayor a cero
+        if concepto_limpio == "":
+            st.error("⚠️ Debes ingresar un concepto válido.")
         elif valor <= 0:
             st.error("⚠️ El valor debe ser mayor a cero.")
         else:
-            # Se agrega el movimiento (un diccionario) a la lista en session_state
-            st.session_state.movimientos.append({
-                "Concepto": concepto.strip(),
-                "Tipo": tipo,
-                "Valor (S/.)": valor
-            })
-            st.success(f"✅ Movimiento '{concepto}' agregado correctamente.")
+            try:
+                st.session_state.movimientos.append({
+                    "Concepto": concepto_limpio,
+                    "Tipo": tipo,
+                    "Valor (S/)": float(valor)
+                })
+                st.success(f"✅ Movimiento '{concepto_limpio}' agregado correctamente.")
+            except Exception as error:
+                st.error(f"⚠️ No se pudo registrar el movimiento: {error}")
 
     st.markdown("---")
 
     # --- Resultados: solo se muestran si la lista tiene movimientos ---
     if len(st.session_state.movimientos) > 0:
         st.subheader("📄 Movimientos registrados")
-        # La lista de diccionarios se convierte en DataFrame para mostrarla como tabla
-        df_movimientos = pd.DataFrame(st.session_state.movimientos)
-        st.dataframe(df_movimientos, width="stretch")
+        try:
+            # La lista de diccionarios se convierte en DataFrame (tabla)
+            df_movimientos = pd.DataFrame(st.session_state.movimientos)
+            df_vista = df_movimientos.copy()
+            df_vista["Valor (S/)"] = df_vista["Valor (S/)"].map(formatear_moneda)
+            st.dataframe(df_vista, width="stretch")
 
-        # --- Cálculos con programación funcional (list comprehension + sum) ---
-        total_ingresos = sum(
-            m["Valor (S/.)"] for m in st.session_state.movimientos if m["Tipo"] == "Ingreso"
-        )
-        total_gastos = sum(
-            m["Valor (S/.)"] for m in st.session_state.movimientos if m["Tipo"] == "Gasto"
-        )
-        saldo = total_ingresos - total_gastos
+            # --- Programación funcional: generadores + sum con filtro ---
+            total_ingresos = sum(
+                m["Valor (S/)"] for m in st.session_state.movimientos
+                if m["Tipo"] == "Ingreso"
+            )
+            total_gastos = sum(
+                m["Valor (S/)"] for m in st.session_state.movimientos
+                if m["Tipo"] == "Gasto"
+            )
+            saldo = total_ingresos - total_gastos
 
-        # --- Métricas en pantalla ---
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total ingresos", f"S/. {total_ingresos:,.2f}")
-        c2.metric("Total gastos", f"S/. {total_gastos:,.2f}")
-        c3.metric("Saldo final", f"S/. {saldo:,.2f}")
+            # --- Métricas en pantalla ---
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Total ingresos", formatear_moneda(total_ingresos))
+            c2.metric("Total gastos", formatear_moneda(total_gastos))
+            c3.metric("Saldo final", formatear_moneda(saldo))
 
-        # --- Control de flujo: el saldo define el mensaje final ---
-        if saldo >= 0:
-            st.success(f"✅ El flujo de caja está **A FAVOR** por S/. {saldo:,.2f}")
-        else:
-            st.error(f"❌ El flujo de caja está **EN CONTRA** por S/. {abs(saldo):,.2f}")
+            # --- Control de flujo: el saldo define el mensaje final ---
+            if saldo >= 0:
+                st.success(f"✅ El flujo de caja está **A FAVOR** por {formatear_moneda(saldo)}")
+            else:
+                st.error(f"❌ El flujo de caja está **EN CONTRA** por {formatear_moneda(abs(saldo))}")
+        except Exception as error:
+            st.error(f"⚠️ Ocurrió un error al procesar los movimientos: {error}")
 
-        # Botón opcional para reiniciar la lista de movimientos
+        # Botón para reiniciar la lista de movimientos
         if st.button("🗑️ Limpiar movimientos"):
             st.session_state.movimientos = []
             st.rerun()
@@ -217,6 +449,7 @@ def mostrar_ejercicio1():
 def mostrar_ejercicio2():
     """Registra productos en arrays de NumPy y los muestra en un DataFrame."""
     st.title("📦 Ejercicio 2 - Registro de productos con NumPy")
+    st.markdown('<div class="banda-marca"></div>', unsafe_allow_html=True)
 
     st.markdown("""
     **Descripción:** este formulario registra productos usando **arrays de
@@ -228,53 +461,93 @@ def mostrar_ejercicio2():
     # --- Formulario de ingreso de datos ---
     col1, col2 = st.columns(2)
     with col1:
-        nombre = st.text_input("Nombre del producto", placeholder="Ej: Laptop")
+        nombre = st.text_input(
+            "Nombre del producto",
+            placeholder="Ej: Laptop",
+            max_chars=MAX_CARACTERES_TEXTO,
+            help="Nombre del producto o servicio (máx. 60 caracteres)."
+        )
         categoria = st.selectbox(
             "Categoría",
-            ["Tecnología", "Alimentos", "Ropa", "Hogar", "Servicios", "Otros"]
+            ["Tecnología", "Alimentos", "Ropa", "Hogar", "Servicios", "Otros"],
+            help="Clasificación del producto para el análisis por categoría."
         )
     with col2:
-        precio = st.number_input("Precio unitario (S/.)", min_value=0.0, step=1.0, format="%.2f")
-        cantidad = st.number_input("Cantidad", min_value=1, step=1)
+        precio = st.number_input(
+            "Precio unitario (S/)",
+            min_value=0.0,
+            max_value=MAX_MONTO,
+            step=1.0,
+            format="%.2f",
+            help="Precio de venta por unidad, en soles."
+        )
+        cantidad = st.number_input(
+            "Cantidad",
+            min_value=1,
+            max_value=1_000_000,
+            step=1,
+            help="Número de unidades del registro (entero, mínimo 1)."
+        )
 
     # El total se calcula automáticamente: precio × cantidad
-    total = precio * cantidad
-    st.markdown(f"**Total del registro:** S/. {total:,.2f}")
+    total = float(precio) * int(cantidad)
+    st.markdown(f"**Total del registro:** {formatear_moneda(total)}")
 
     # --- Botón para agregar el registro a los arrays ---
     if st.button("➕ Agregar registro"):
-        if nombre.strip() == "":
-            st.error("⚠️ Debes ingresar el nombre del producto.")
+        nombre_limpio = limpiar_texto(nombre)
+        if nombre_limpio == "":
+            st.error("⚠️ Debes ingresar un nombre de producto válido.")
         elif precio <= 0:
             st.error("⚠️ El precio debe ser mayor a cero.")
         else:
-            # np.append crea un nuevo array agregando el elemento al final
-            st.session_state.arr_productos = np.append(st.session_state.arr_productos, nombre.strip())
-            st.session_state.arr_categorias = np.append(st.session_state.arr_categorias, categoria)
-            st.session_state.arr_precios = np.append(st.session_state.arr_precios, precio)
-            st.session_state.arr_cantidades = np.append(st.session_state.arr_cantidades, cantidad)
-            st.session_state.arr_totales = np.append(st.session_state.arr_totales, total)
-            st.success(f"✅ Producto '{nombre}' registrado correctamente.")
+            try:
+                # Advertencia (no bloqueo) si el producto ya fue registrado antes
+                if nombre_limpio in st.session_state.arr_productos:
+                    st.warning(
+                        f"ℹ️ '{nombre_limpio}' ya estaba registrado; "
+                        "se agregó como un registro adicional."
+                    )
+                # np.append crea un nuevo array agregando el elemento al final
+                st.session_state.arr_productos = np.append(st.session_state.arr_productos, nombre_limpio)
+                st.session_state.arr_categorias = np.append(st.session_state.arr_categorias, categoria)
+                st.session_state.arr_precios = np.append(st.session_state.arr_precios, float(precio))
+                st.session_state.arr_cantidades = np.append(st.session_state.arr_cantidades, int(cantidad))
+                st.session_state.arr_totales = np.append(st.session_state.arr_totales, total)
+                st.success(f"✅ Producto '{nombre_limpio}' registrado correctamente.")
+            except Exception as error:
+                st.error(f"⚠️ No se pudo registrar el producto: {error}")
 
     st.markdown("---")
 
     # --- Tabla actualizada: los arrays se convierten en DataFrame ---
     if st.session_state.arr_productos.size > 0:
         st.subheader("📄 Registros almacenados (arrays → DataFrame)")
-        df_registros = pd.DataFrame({
-            "Producto": st.session_state.arr_productos,
-            "Categoría": st.session_state.arr_categorias,
-            "Precio (S/.)": st.session_state.arr_precios,
-            "Cantidad": st.session_state.arr_cantidades,
-            "Total (S/.)": st.session_state.arr_totales
-        })
-        st.dataframe(df_registros, width="stretch")
+        try:
+            df_registros = pd.DataFrame({
+                "Producto": st.session_state.arr_productos,
+                "Categoría": st.session_state.arr_categorias,
+                "Precio (S/)": [formatear_moneda(p) for p in st.session_state.arr_precios],
+                "Cantidad": st.session_state.arr_cantidades,
+                "Total (S/)": [formatear_moneda(t) for t in st.session_state.arr_totales],
+            })
+            st.dataframe(df_registros, width="stretch")
 
-        # Estadísticas rápidas aprovechando las operaciones vectorizadas de NumPy
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Registros", int(st.session_state.arr_productos.size))
-        c2.metric("Venta total", f"S/. {st.session_state.arr_totales.sum():,.2f}")
-        c3.metric("Ticket promedio", f"S/. {st.session_state.arr_totales.mean():,.2f}")
+            # Estadísticas con operaciones vectorizadas de NumPy
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Registros", int(st.session_state.arr_productos.size))
+            c2.metric("Venta total", formatear_moneda(st.session_state.arr_totales.sum()))
+            c3.metric("Ticket promedio", formatear_moneda(st.session_state.arr_totales.mean()))
+        except Exception as error:
+            st.error(f"⚠️ Ocurrió un error al mostrar los registros: {error}")
+
+        if st.button("🗑️ Limpiar registros"):
+            st.session_state.arr_productos = np.array([], dtype=object)
+            st.session_state.arr_categorias = np.array([], dtype=object)
+            st.session_state.arr_precios = np.array([], dtype=float)
+            st.session_state.arr_cantidades = np.array([], dtype=int)
+            st.session_state.arr_totales = np.array([], dtype=float)
+            st.rerun()
     else:
         st.info("ℹ️ Aún no hay registros. Agrega el primer producto arriba.")
 
@@ -285,6 +558,7 @@ def mostrar_ejercicio2():
 def mostrar_ejercicio3():
     """Conecta la función calcular_wacc() de la librería externa con widgets."""
     st.title("📊 Ejercicio 3 - Cálculo del WACC (librería externa)")
+    st.markdown('<div class="banda-marca"></div>', unsafe_allow_html=True)
 
     st.markdown("""
     **Descripción:** se utiliza la función `calcular_wacc()` del archivo
@@ -303,59 +577,100 @@ def mostrar_ejercicio3():
     # --- Selector de función (requisito de la interfaz) ---
     st.selectbox(
         "Función seleccionada de la librería:",
-        ["calcular_wacc - Costo promedio ponderado de capital"]
+        ["calcular_wacc - Costo promedio ponderado de capital"],
+        help="Función elegida de libreria_funciones_proyecto1.py (área financiera)."
     )
 
     # --- Widgets para ingresar los parámetros de la función ---
     col1, col2 = st.columns(2)
     with col1:
-        deuda = st.number_input("Deuda total (S/.)", min_value=0.0, value=400000.0, step=10000.0)
-        patrimonio = st.number_input("Patrimonio total (S/.)", min_value=0.0, value=600000.0, step=10000.0)
-        impuesto_pct = st.number_input("Tasa de impuestos (%)", min_value=0.0, max_value=100.0, value=29.5)
+        deuda = st.number_input(
+            "Deuda total (S/)",
+            min_value=0.0, max_value=MAX_MONTO, value=400000.0, step=10000.0,
+            help="D: financiamiento con terceros (préstamos, bonos). Puede ser 0, "
+                 "pero deuda y patrimonio no pueden ser 0 a la vez."
+        )
+        patrimonio = st.number_input(
+            "Patrimonio total (S/)",
+            min_value=0.0, max_value=MAX_MONTO, value=600000.0, step=10000.0,
+            help="E: aporte de los accionistas (capital propio)."
+        )
+        impuesto_pct = st.number_input(
+            "Tasa de impuestos (%)",
+            min_value=0.0, max_value=100.0, value=29.5,
+            help="T: tasa del Impuesto a la Renta. En Perú la tasa general "
+                 "de tercera categoría es 29.5%."
+        )
     with col2:
-        costo_deuda_pct = st.number_input("Costo de la deuda Kd (%)", min_value=0.0, max_value=100.0, value=8.0)
-        costo_patrimonio_pct = st.number_input("Costo del patrimonio Ke (%)", min_value=0.0, max_value=100.0, value=15.0)
+        costo_deuda_pct = st.number_input(
+            "Costo de la deuda Kd (%)",
+            min_value=0.0, max_value=100.0, value=8.0,
+            help="Kd: tasa de interés promedio que la empresa paga por su deuda."
+        )
+        costo_patrimonio_pct = st.number_input(
+            "Costo del patrimonio Ke (%)",
+            min_value=0.0, max_value=100.0, value=15.0,
+            help="Ke: rentabilidad mínima exigida por los accionistas "
+                 "(usualmente estimada con el modelo CAPM)."
+        )
 
     # --- Botón para ejecutar la función ---
     if st.button("🧮 Calcular WACC"):
-        # try/except captura las validaciones internas de la librería
-        try:
-            resultado = calcular_wacc(
-                deuda=deuda,
-                patrimonio=patrimonio,
-                costo_deuda_pct=costo_deuda_pct,
-                costo_patrimonio_pct=costo_patrimonio_pct,
-                impuesto_pct=impuesto_pct
-            )
-            wacc = resultado["wacc_pct"]
+        # Validación previa: V = D + E no puede ser cero
+        if deuda + patrimonio <= 0:
+            st.error("⚠️ La suma de deuda y patrimonio debe ser mayor a cero.")
+        else:
+            try:
+                resultado = calcular_wacc(
+                    deuda=deuda,
+                    patrimonio=patrimonio,
+                    costo_deuda_pct=costo_deuda_pct,
+                    costo_patrimonio_pct=costo_patrimonio_pct,
+                    impuesto_pct=impuesto_pct
+                )
+                wacc = resultado["wacc_pct"]
 
-            # --- Resultado en pantalla ---
-            st.metric("WACC calculado", f"{wacc:.2f} %")
-            st.success(
-                f"✅ El costo promedio ponderado de capital es **{wacc:.2f}%**. "
-                "Los proyectos de la empresa deberían rendir por encima de esta tasa."
-            )
+                # --- Resultado en pantalla ---
+                st.metric("WACC calculado", f"{formatear_numero(wacc)} %")
+                st.success(
+                    f"✅ El costo promedio ponderado de capital es **{formatear_numero(wacc)}%**. "
+                    "Los proyectos de la empresa deberían rendir por encima de esta tasa."
+                )
 
-            # --- Se agrega el resultado al histórico ---
-            st.session_state.historico_wacc.append({
-                "Deuda (S/.)": deuda,
-                "Patrimonio (S/.)": patrimonio,
-                "Kd (%)": costo_deuda_pct,
-                "Ke (%)": costo_patrimonio_pct,
-                "Impuesto (%)": impuesto_pct,
-                "WACC (%)": wacc
-            })
-        except ValueError as error:
-            # Si la librería detecta un dato inválido, se muestra el mensaje
-            st.error(f"⚠️ Error en los datos ingresados: {error}")
+                # --- Se agrega el resultado al histórico (con tope) ---
+                st.session_state.historico_wacc.append({
+                    "Deuda (S/)": deuda,
+                    "Patrimonio (S/)": patrimonio,
+                    "Kd (%)": costo_deuda_pct,
+                    "Ke (%)": costo_patrimonio_pct,
+                    "Impuesto (%)": impuesto_pct,
+                    "WACC (%)": wacc
+                })
+                if len(st.session_state.historico_wacc) > MAX_REGISTROS_HISTORICO:
+                    st.session_state.historico_wacc.pop(0)
+            except (ValueError, ZeroDivisionError) as error:
+                # Validaciones internas de la librería o división inválida
+                st.error(f"⚠️ Error en los datos ingresados: {error}")
+            except Exception as error:
+                st.error(f"⚠️ Error inesperado al calcular el WACC: {error}")
 
     st.markdown("---")
 
     # --- Tabla histórica de resultados ---
     if len(st.session_state.historico_wacc) > 0:
         st.subheader("📄 Histórico de cálculos")
-        df_historico = pd.DataFrame(st.session_state.historico_wacc)
-        st.dataframe(df_historico, width="stretch")
+        try:
+            df_historico = pd.DataFrame(st.session_state.historico_wacc)
+            df_vista = df_historico.copy()
+            for col in ("Deuda (S/)", "Patrimonio (S/)"):
+                df_vista[col] = df_vista[col].map(formatear_moneda)
+            st.dataframe(df_vista, width="stretch")
+        except Exception as error:
+            st.error(f"⚠️ No se pudo mostrar el histórico: {error}")
+
+        if st.button("🗑️ Limpiar histórico"):
+            st.session_state.historico_wacc = []
+            st.rerun()
     else:
         st.info("ℹ️ Aún no hay cálculos en el histórico.")
 
@@ -366,6 +681,7 @@ def mostrar_ejercicio3():
 def mostrar_ejercicio4():
     """CRUD de proyectos de inversión usando la clase ProyectoInversion."""
     st.title("🏗️ Ejercicio 4 - CRUD de proyectos de inversión (POO)")
+    st.markdown('<div class="banda-marca"></div>', unsafe_allow_html=True)
 
     st.markdown("""
     **Descripción:** se utiliza la clase `ProyectoInversion` del archivo
@@ -386,42 +702,71 @@ def mostrar_ejercicio4():
     with tab_crear:
         st.subheader("Crear un nuevo proyecto")
 
-        nombre_proy = st.text_input("Nombre del proyecto", placeholder="Ej: Planta de Arequipa")
+        nombre_proy = st.text_input(
+            "Nombre del proyecto",
+            placeholder="Ej: Planta de Arequipa",
+            max_chars=MAX_CARACTERES_TEXTO,
+            help="Identificador único del proyecto (máx. 60 caracteres)."
+        )
         col1, col2 = st.columns(2)
         with col1:
-            inversion = st.number_input("Inversión inicial (S/.)", min_value=0.0, value=100000.0, step=5000.0)
-            tasa = st.number_input("Tasa de descuento (%)", min_value=0.0, max_value=100.0, value=12.0)
+            inversion = st.number_input(
+                "Inversión inicial (S/)",
+                min_value=0.0, max_value=MAX_MONTO, value=100000.0, step=5000.0,
+                help="Desembolso en el año 0. Debe ser mayor a cero."
+            )
+            tasa = st.number_input(
+                "Tasa de descuento (%)",
+                min_value=0.0, max_value=100.0, value=12.0,
+                help="Tasa para traer los flujos a valor presente; "
+                     "usualmente el WACC o el costo de oportunidad (COK)."
+            )
         with col2:
-            anios = st.number_input("Número de años de flujos", min_value=1, max_value=10, value=3)
+            anios = st.number_input(
+                "Número de años de flujos",
+                min_value=1, max_value=10, value=3,
+                help="Horizonte de evaluación del proyecto (1 a 10 años)."
+            )
 
         # Se genera un number_input por cada año de flujo proyectado
-        st.markdown("**Flujos de caja anuales proyectados (S/.):**")
+        st.markdown("**Flujos de caja anuales proyectados (S/):**")
         flujos = []
         columnas_flujos = st.columns(int(anios))
         for i, col in enumerate(columnas_flujos):
             with col:
-                flujo = st.number_input(f"Año {i + 1}", min_value=0.0, value=40000.0,
-                                        step=5000.0, key=f"flujo_{i}")
-                flujos.append(flujo)
+                flujo = st.number_input(
+                    f"Año {i + 1}",
+                    min_value=0.0, max_value=MAX_MONTO, value=40000.0,
+                    step=5000.0, key=f"flujo_{i}",
+                    help=f"Flujo de caja neto esperado del año {i + 1}."
+                )
+                flujos.append(float(flujo))
 
         if st.button("➕ Crear proyecto"):
-            if nombre_proy.strip() == "":
-                st.error("⚠️ Debes ingresar el nombre del proyecto.")
-            elif nombre_proy.strip() in st.session_state.proyectos:
+            nombre_limpio = limpiar_texto(nombre_proy)
+            if nombre_limpio == "":
+                st.error("⚠️ Debes ingresar un nombre de proyecto válido.")
+            elif nombre_limpio in st.session_state.proyectos:
                 st.error("⚠️ Ya existe un proyecto con ese nombre. Usa 'Actualizar' para modificarlo.")
+            elif sum(flujos) <= 0:
+                # Guarda: el payback divide entre el flujo promedio; con todos
+                # los flujos en cero se produciría una división entre cero.
+                st.error("⚠️ Al menos un flujo anual debe ser mayor a cero.")
             else:
                 try:
                     # Se instancia el objeto y se guarda en el diccionario
                     proyecto = ProyectoInversion(
-                        nombre_proyecto=nombre_proy.strip(),
+                        nombre_proyecto=nombre_limpio,
                         inversion_inicial=inversion,
                         flujos=flujos,
                         tasa_descuento_pct=tasa
                     )
-                    st.session_state.proyectos[nombre_proy.strip()] = proyecto
-                    st.success(f"✅ Proyecto '{nombre_proy}' creado correctamente.")
-                except ValueError as error:
+                    st.session_state.proyectos[nombre_limpio] = proyecto
+                    st.success(f"✅ Proyecto '{nombre_limpio}' creado correctamente.")
+                except (ValueError, ZeroDivisionError) as error:
                     st.error(f"⚠️ Error al crear el proyecto: {error}")
+                except Exception as error:
+                    st.error(f"⚠️ Error inesperado al crear el proyecto: {error}")
 
     # -------------------------------------------------------------------------
     # LEER: muestra todos los proyectos con sus indicadores calculados
@@ -430,28 +775,50 @@ def mostrar_ejercicio4():
         st.subheader("Proyectos registrados")
 
         if len(st.session_state.proyectos) > 0:
-            # El método resumen() de cada objeto devuelve un diccionario
-            # con VPN, ROI, Payback y la decisión (Viable / No viable)
-            resumenes = [p.resumen() for p in st.session_state.proyectos.values()]
-            df_proyectos = pd.DataFrame(resumenes)
-            df_proyectos.columns = ["Proyecto", "VPN (S/.)", "ROI (%)",
-                                    "Payback (años)", "Decisión"]
-            st.dataframe(df_proyectos, width="stretch")
+            try:
+                # El método resumen() de cada objeto devuelve un diccionario
+                # con VPN, ROI, Payback y la decisión (Viable / No viable)
+                resumenes = [p.resumen() for p in st.session_state.proyectos.values()]
+                df_proyectos = pd.DataFrame(resumenes)
+                df_proyectos.columns = ["Proyecto", "VPN (S/)", "ROI (%)",
+                                        "Payback (años)", "Decisión"]
+                df_vista = df_proyectos.copy()
+                df_vista["VPN (S/)"] = df_vista["VPN (S/)"].map(formatear_moneda)
+                st.dataframe(df_vista, width="stretch")
 
-            # Detalle individual del proyecto seleccionado
-            seleccionado = st.selectbox("Ver detalle de:", list(st.session_state.proyectos.keys()))
-            proyecto = st.session_state.proyectos[seleccionado]
-            resumen = proyecto.resumen()
+                # Detalle individual del proyecto seleccionado
+                seleccionado = st.selectbox(
+                    "Ver detalle de:",
+                    list(st.session_state.proyectos.keys()),
+                    help="Selecciona un proyecto para ver sus indicadores."
+                )
+                resumen = st.session_state.proyectos[seleccionado].resumen()
 
-            c1, c2, c3 = st.columns(3)
-            c1.metric("VPN", f"S/. {resumen['vpn']:,.2f}")
-            c2.metric("ROI", f"{resumen['roi_pct']:.2f} %")
-            c3.metric("Payback", f"{resumen['payback_anios']:.2f} años")
+                c1, c2, c3 = st.columns(3)
+                c1.metric(
+                    "VPN", formatear_moneda(resumen["vpn"]),
+                    help="Valor Presente Neto: valor que el proyecto crea "
+                         "(VPN > 0) o destruye (VPN < 0) a la tasa de descuento."
+                )
+                c2.metric(
+                    "ROI", f"{formatear_numero(resumen['roi_pct'])} %",
+                    help="Retorno sobre la inversión: utilidad total de los "
+                         "flujos respecto de la inversión inicial."
+                )
+                c3.metric(
+                    "Payback", f"{formatear_numero(resumen['payback_anios'])} años",
+                    help="Años necesarios para recuperar la inversión "
+                         "(método simple, con flujo promedio)."
+                )
 
-            if resumen["decision"] == "Viable":
-                st.success(f"✅ El proyecto '{seleccionado}' es **VIABLE** (VPN positivo).")
-            else:
-                st.error(f"❌ El proyecto '{seleccionado}' **NO es viable** (VPN negativo).")
+                if resumen["decision"] == "Viable":
+                    st.success(f"✅ El proyecto '{seleccionado}' es **VIABLE** (VPN positivo).")
+                else:
+                    st.error(f"❌ El proyecto '{seleccionado}' **NO es viable** (VPN negativo).")
+            except (ValueError, ZeroDivisionError) as error:
+                st.error(f"⚠️ Error al calcular los indicadores: {error}")
+            except Exception as error:
+                st.error(f"⚠️ Error inesperado al mostrar los proyectos: {error}")
         else:
             st.info("ℹ️ No hay proyectos registrados. Crea uno en la pestaña 'Crear'.")
 
@@ -465,7 +832,8 @@ def mostrar_ejercicio4():
             nombre_actualizar = st.selectbox(
                 "Proyecto a actualizar:",
                 list(st.session_state.proyectos.keys()),
-                key="sel_actualizar"
+                key="sel_actualizar",
+                help="Los campos se precargan con los valores actuales del proyecto."
             )
             proyecto_actual = st.session_state.proyectos[nombre_actualizar]
 
@@ -473,46 +841,54 @@ def mostrar_ejercicio4():
             col1, col2 = st.columns(2)
             with col1:
                 nueva_inversion = st.number_input(
-                    "Nueva inversión inicial (S/.)",
-                    min_value=0.0,
+                    "Nueva inversión inicial (S/)",
+                    min_value=0.0, max_value=MAX_MONTO,
                     value=float(proyecto_actual.inversion_inicial),
                     step=5000.0,
-                    key="upd_inversion"
+                    key="upd_inversion",
+                    help="Desembolso en el año 0. Debe ser mayor a cero."
                 )
             with col2:
                 nueva_tasa = st.number_input(
                     "Nueva tasa de descuento (%)",
                     min_value=0.0, max_value=100.0,
                     value=float(proyecto_actual.tasa_descuento_pct),
-                    key="upd_tasa"
+                    key="upd_tasa",
+                    help="Tasa para descontar los flujos (WACC o COK)."
                 )
 
-            st.markdown("**Flujos de caja anuales (S/.):**")
+            st.markdown("**Flujos de caja anuales (S/):**")
             nuevos_flujos = []
             columnas_upd = st.columns(len(proyecto_actual.flujos))
             for i, col in enumerate(columnas_upd):
                 with col:
                     flujo = st.number_input(
                         f"Año {i + 1}",
-                        min_value=0.0,
+                        min_value=0.0, max_value=MAX_MONTO,
                         value=float(proyecto_actual.flujos[i]),
                         step=5000.0,
-                        key=f"upd_flujo_{i}"
+                        key=f"upd_flujo_{i}",
+                        help=f"Flujo de caja neto esperado del año {i + 1}."
                     )
-                    nuevos_flujos.append(flujo)
+                    nuevos_flujos.append(float(flujo))
 
             if st.button("✏️ Guardar cambios"):
-                try:
-                    # Se reemplaza el objeto por uno nuevo con los datos actualizados
-                    st.session_state.proyectos[nombre_actualizar] = ProyectoInversion(
-                        nombre_proyecto=nombre_actualizar,
-                        inversion_inicial=nueva_inversion,
-                        flujos=nuevos_flujos,
-                        tasa_descuento_pct=nueva_tasa
-                    )
-                    st.success(f"✅ Proyecto '{nombre_actualizar}' actualizado correctamente.")
-                except ValueError as error:
-                    st.error(f"⚠️ Error al actualizar: {error}")
+                if sum(nuevos_flujos) <= 0:
+                    st.error("⚠️ Al menos un flujo anual debe ser mayor a cero.")
+                else:
+                    try:
+                        # Se reemplaza el objeto por uno nuevo con los datos actualizados
+                        st.session_state.proyectos[nombre_actualizar] = ProyectoInversion(
+                            nombre_proyecto=nombre_actualizar,
+                            inversion_inicial=nueva_inversion,
+                            flujos=nuevos_flujos,
+                            tasa_descuento_pct=nueva_tasa
+                        )
+                        st.success(f"✅ Proyecto '{nombre_actualizar}' actualizado correctamente.")
+                    except (ValueError, ZeroDivisionError) as error:
+                        st.error(f"⚠️ Error al actualizar: {error}")
+                    except Exception as error:
+                        st.error(f"⚠️ Error inesperado al actualizar: {error}")
         else:
             st.info("ℹ️ No hay proyectos para actualizar.")
 
@@ -526,13 +902,17 @@ def mostrar_ejercicio4():
             nombre_eliminar = st.selectbox(
                 "Proyecto a eliminar:",
                 list(st.session_state.proyectos.keys()),
-                key="sel_eliminar"
+                key="sel_eliminar",
+                help="Esta acción quita el proyecto del registro de la sesión."
             )
             if st.button("🗑️ Eliminar proyecto"):
-                # del elimina la clave (y su objeto) del diccionario
-                del st.session_state.proyectos[nombre_eliminar]
-                st.success(f"✅ Proyecto '{nombre_eliminar}' eliminado.")
-                st.rerun()
+                try:
+                    # del elimina la clave (y su objeto) del diccionario
+                    del st.session_state.proyectos[nombre_eliminar]
+                    st.success(f"✅ Proyecto '{nombre_eliminar}' eliminado.")
+                    st.rerun()
+                except KeyError:
+                    st.error("⚠️ El proyecto ya no existe en el registro.")
         else:
             st.info("ℹ️ No hay proyectos para eliminar.")
 
@@ -540,16 +920,28 @@ def mostrar_ejercicio4():
 # =============================================================================
 # ENRUTAMIENTO PRINCIPAL
 # -----------------------------------------------------------------------------
-# Según la opción elegida en el menú lateral, se llama a la función
-# que dibuja la sección correspondiente.
+# Según la opción elegida en el menú lateral, se llama a la función que
+# dibuja la sección correspondiente. Un try/except global evita que un
+# error no previsto muestre un traceback crudo al usuario final.
 # =============================================================================
-if seccion == "Home":
-    mostrar_home()
-elif seccion == "Ejercicio 1":
-    mostrar_ejercicio1()
-elif seccion == "Ejercicio 2":
-    mostrar_ejercicio2()
-elif seccion == "Ejercicio 3":
-    mostrar_ejercicio3()
-elif seccion == "Ejercicio 4":
-    mostrar_ejercicio4()
+SECCIONES = {
+    "Home": mostrar_home,
+    "Ejercicio 1": mostrar_ejercicio1,
+    "Ejercicio 2": mostrar_ejercicio2,
+    "Ejercicio 3": mostrar_ejercicio3,
+    "Ejercicio 4": mostrar_ejercicio4,
+}
+
+try:
+    SECCIONES.get(seccion, mostrar_home)()
+except Exception as error_global:
+    st.error(
+        "🚫 Ocurrió un error no previsto en la aplicación. "
+        f"Detalle técnico: `{error_global}`"
+    )
+
+st.markdown(
+    '<div class="pie-pagina">Proyecto 1 · Especialización Python for Analytics · '
+    'Otto Morales Gómez · Perú 🇵🇪 · 2026</div>',
+    unsafe_allow_html=True,
+)
