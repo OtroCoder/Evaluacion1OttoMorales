@@ -125,6 +125,26 @@ def mostrar_logo(ancho: int = 220) -> None:
         st.markdown("### 💡")
 
 
+def encabezado_hero(chip: str, titulo: str, subtitulo: str) -> None:
+    """
+    Dibuja un encabezado tipo banner moderno (hero) con el logo discreto,
+    una etiqueta superior (chip), el título y un subtítulo.
+    """
+    st.markdown(
+        f"""
+        <div class="hero">
+          <img src="data:image/png;base64,{LOGO_BASE64}" alt="logo"/>
+          <div>
+            <span class="hero-chip">{chip}</span>
+            <div class="hero-titulo">{titulo}</div>
+            <p class="hero-sub">{subtitulo}</p>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def inyectar_estilos() -> None:
     """
     Inyecta el CSS de identidad visual (HTML moderno dentro de app.py):
@@ -151,8 +171,77 @@ def inyectar_estilos() -> None:
         [data-testid="stSidebar"] * {{
             color: #ffffff !important;
         }}
-        [data-testid="stSidebar"] [data-baseweb="select"] * {{
-            color: {PALETA['navy']} !important;
+
+        /* ---------- Marca discreta en el sidebar ---------- */
+        .marca-sidebar {{
+            display: flex; align-items: center; gap: 12px;
+            padding: 6px 2px 14px 2px;
+            border-bottom: 1px solid rgba(255,255,255,.14);
+            margin-bottom: 14px;
+        }}
+        .marca-sidebar img {{
+            height: 44px; width: 44px;
+            background: #ffffff; border-radius: 12px; padding: 5px;
+        }}
+        .marca-nombre {{ font-weight: 700; font-size: 1.05rem; }}
+        .marca-sub {{ font-size: .78rem; opacity: .75; }}
+
+        /* ---------- Navegación tipo píldoras (st.radio) ---------- */
+        [data-testid="stSidebar"] [role="radiogroup"] > label {{
+            background: rgba(255,255,255,.07);
+            border: 1px solid rgba(255,255,255,.14);
+            border-radius: 12px;
+            padding: 10px 14px;
+            margin-bottom: 8px;
+            width: 100%;
+            transition: background .15s ease, transform .1s ease;
+            cursor: pointer;
+        }}
+        [data-testid="stSidebar"] [role="radiogroup"] > label:hover {{
+            background: rgba(255,255,255,.18);
+            transform: translateX(2px);
+        }}
+        [data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) {{
+            background: linear-gradient(90deg, {PALETA['naranja']} 0%, {PALETA['naranja_oscuro']} 100%);
+            border-color: transparent;
+            box-shadow: 0 4px 12px rgba(241, 117, 7, .40);
+        }}
+        /* Oculta el círculo del radio para que parezca un menú */
+        [data-testid="stSidebar"] [role="radiogroup"] > label > div:first-child {{
+            display: none;
+        }}
+
+        /* ---------- Encabezado hero (estilo banner moderno) ---------- */
+        .hero {{
+            background: linear-gradient(120deg, {PALETA['navy']} 0%, #0d3a63 55%, #11507f 100%);
+            border-radius: 18px;
+            padding: 26px 32px;
+            margin-bottom: 10px;
+            display: flex; align-items: center; gap: 20px;
+            box-shadow: 0 10px 28px rgba(9, 44, 77, .28);
+        }}
+        .hero img {{
+            height: 58px; width: 58px;
+            background: #ffffff; border-radius: 14px; padding: 7px;
+            flex-shrink: 0;
+        }}
+        .hero .hero-titulo {{
+            color: #ffffff; font-size: 1.65rem; font-weight: 800;
+            margin: 0; letter-spacing: -0.02em; line-height: 1.2;
+        }}
+        .hero .hero-sub {{
+            color: #b9d4ea; margin: 5px 0 0 0; font-size: .95rem;
+        }}
+        .hero .hero-chip {{
+            display: inline-block;
+            background: rgba(10, 217, 216, .16);
+            color: {PALETA['turquesa']};
+            border: 1px solid rgba(10, 217, 216, .35);
+            border-radius: 999px;
+            padding: 3px 12px;
+            font-size: .74rem; font-weight: 700;
+            letter-spacing: .06em; text-transform: uppercase;
+            margin-bottom: 8px;
         }}
 
         /* ---------- Botones: degradado naranja de marca ---------- */
@@ -267,17 +356,42 @@ inyectar_estilos()
 
 # =============================================================================
 # MENÚ LATERAL DE NAVEGACIÓN
+# -----------------------------------------------------------------------------
+# Se usa st.radio estilizado como "píldoras" modernas (ver CSS). El texto de
+# cada opción es descriptivo (E1, E2, ...) y el diccionario lo traduce a la
+# sección interna correspondiente.
 # =============================================================================
+OPCIONES_MENU = {
+    "🏠  Home": "Home",
+    "💰  E1 · Flujo de Caja": "Ejercicio 1",
+    "📦  E2 · Registro NumPy": "Ejercicio 2",
+    "📊  E3 · Cálculo WACC": "Ejercicio 3",
+    "🏗️  E4 · CRUD Inversiones": "Ejercicio 4",
+}
+
 with st.sidebar:
-    mostrar_logo(ancho=120)
-    st.title("📌 Navegación")
-    seccion = st.selectbox(
+    st.markdown(
+        f"""
+        <div class="marca-sidebar">
+          <img src="data:image/png;base64,{LOGO_BASE64}" alt="logo"/>
+          <div>
+            <div class="marca-nombre">Proyecto 1</div>
+            <div class="marca-sub">Python for Analytics</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown("##### Navegación")
+    opcion_menu = st.radio(
         "Selecciona una sección:",
-        ["Home", "Ejercicio 1", "Ejercicio 2", "Ejercicio 3", "Ejercicio 4"],
+        list(OPCIONES_MENU.keys()),
+        label_visibility="collapsed",
         help="Cada sección corresponde a un ejercicio del Módulo 1."
     )
+    seccion = OPCIONES_MENU[opcion_menu]
     st.markdown("---")
-    st.caption("Proyecto 1 · Otto Morales Gómez · 2026")
+    st.caption("Otto Morales Gómez · Perú 🇵🇪 · 2026")
 
 
 # =============================================================================
@@ -285,9 +399,12 @@ with st.sidebar:
 # =============================================================================
 def mostrar_home():
     """Muestra la página de presentación del proyecto."""
-    st.title("Proyecto 1 - Aplicación Interactiva en Streamlit")
-    st.markdown('<div class="banda-marca"></div>', unsafe_allow_html=True)
-    st.subheader("Especialización Python for Analytics")
+    encabezado_hero(
+        "Módulo 1 · Python Fundamentals",
+        "Proyecto 1 - Aplicación Interactiva en Streamlit",
+        "Especialización Python for Analytics · Variables, estructuras de datos, "
+        "funciones y POO"
+    )
 
     col_izq, col_der = st.columns([1, 2])
 
@@ -343,8 +460,11 @@ def mostrar_home():
 # =============================================================================
 def mostrar_ejercicio1():
     """Registra ingresos y gastos en una lista y calcula el saldo final."""
-    st.title("💰 Ejercicio 1 - Flujo de caja con listas")
-    st.markdown('<div class="banda-marca"></div>', unsafe_allow_html=True)
+    encabezado_hero(
+        "E1 · Listas",
+        "Flujo de Caja",
+        "Registro de ingresos y gastos con listas de Python y cálculo del saldo final"
+    )
 
     st.markdown("""
     **Descripción:** este módulo registra movimientos financieros
@@ -376,8 +496,9 @@ def mostrar_ejercicio1():
             max_value=MAX_MONTO,
             step=10.0,
             format="%.2f",
-            help="Monto en soles, mayor a cero. Formato es_PE: S/ 1,500.75"
+            help="Monto en soles, mayor a cero."
         )
+        st.caption(f"Se registrará: **{formatear_moneda(valor)}**")
 
     # --- Botón para agregar el movimiento a la lista ---
     if st.button("➕ Agregar movimiento"):
@@ -448,8 +569,11 @@ def mostrar_ejercicio1():
 # =============================================================================
 def mostrar_ejercicio2():
     """Registra productos en arrays de NumPy y los muestra en un DataFrame."""
-    st.title("📦 Ejercicio 2 - Registro de productos con NumPy")
-    st.markdown('<div class="banda-marca"></div>', unsafe_allow_html=True)
+    encabezado_hero(
+        "E2 · NumPy",
+        "Registro de Productos",
+        "Arrays de NumPy convertidos en un DataFrame de Pandas actualizado en vivo"
+    )
 
     st.markdown("""
     **Descripción:** este formulario registra productos usando **arrays de
@@ -481,6 +605,7 @@ def mostrar_ejercicio2():
             format="%.2f",
             help="Precio de venta por unidad, en soles."
         )
+        st.caption(f"Formato es_PE: **{formatear_moneda(precio)}**")
         cantidad = st.number_input(
             "Cantidad",
             min_value=1,
@@ -557,8 +682,11 @@ def mostrar_ejercicio2():
 # =============================================================================
 def mostrar_ejercicio3():
     """Conecta la función calcular_wacc() de la librería externa con widgets."""
-    st.title("📊 Ejercicio 3 - Cálculo del WACC (librería externa)")
-    st.markdown('<div class="banda-marca"></div>', unsafe_allow_html=True)
+    encabezado_hero(
+        "E3 · Función externa",
+        "Cálculo del WACC",
+        "Costo promedio ponderado de capital con calcular_wacc() de la librería del curso"
+    )
 
     st.markdown("""
     **Descripción:** se utiliza la función `calcular_wacc()` del archivo
@@ -590,11 +718,13 @@ def mostrar_ejercicio3():
             help="D: financiamiento con terceros (préstamos, bonos). Puede ser 0, "
                  "pero deuda y patrimonio no pueden ser 0 a la vez."
         )
+        st.caption(f"Formato es_PE: **{formatear_moneda(deuda)}**")
         patrimonio = st.number_input(
             "Patrimonio total (S/)",
             min_value=0.0, max_value=MAX_MONTO, value=600000.0, step=10000.0,
             help="E: aporte de los accionistas (capital propio)."
         )
+        st.caption(f"Formato es_PE: **{formatear_moneda(patrimonio)}**")
         impuesto_pct = st.number_input(
             "Tasa de impuestos (%)",
             min_value=0.0, max_value=100.0, value=29.5,
@@ -680,8 +810,12 @@ def mostrar_ejercicio3():
 # =============================================================================
 def mostrar_ejercicio4():
     """CRUD de proyectos de inversión usando la clase ProyectoInversion."""
-    st.title("🏗️ Ejercicio 4 - CRUD de proyectos de inversión (POO)")
-    st.markdown('<div class="banda-marca"></div>', unsafe_allow_html=True)
+    encabezado_hero(
+        "E4 · POO + CRUD",
+        "Proyectos de Inversión",
+        "Crear, leer, actualizar y eliminar proyectos con la clase ProyectoInversion "
+        "(VPN, ROI y Payback)"
+    )
 
     st.markdown("""
     **Descripción:** se utiliza la clase `ProyectoInversion` del archivo
@@ -715,6 +849,7 @@ def mostrar_ejercicio4():
                 min_value=0.0, max_value=MAX_MONTO, value=100000.0, step=5000.0,
                 help="Desembolso en el año 0. Debe ser mayor a cero."
             )
+            st.caption(f"Formato es_PE: **{formatear_moneda(inversion)}**")
             tasa = st.number_input(
                 "Tasa de descuento (%)",
                 min_value=0.0, max_value=100.0, value=12.0,
