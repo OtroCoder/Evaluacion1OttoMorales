@@ -133,7 +133,7 @@ def encabezado_hero(chip: str, titulo: str, subtitulo: str) -> None:
     st.markdown(
         f"""
         <div class="hero">
-          <img src="data:image/png;base64,{LOGO_BASE64}" alt="logo"/>
+         
           <div>
             <span class="hero-chip">{chip}</span>
             <div class="hero-titulo">{titulo}</div>
