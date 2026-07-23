@@ -48,7 +48,7 @@ st.set_page_config(
 # se detiene con un mensaje claro en lugar de mostrar un traceback crudo.
 # =============================================================================
 try:
-    from libreria_funciones_proyecto1 import calcular_wacc
+    from libreria_funciones_proyecto1 import calcular_cuota_prestamo_frances
     from libreria_clases_proyecto1 import ProyectoInversion
 except ImportError as error_importacion:
     st.error(
@@ -71,7 +71,7 @@ PALETA = {
 }
 
 MAX_CARACTERES_TEXTO = 60          # longitud máxima de conceptos y nombres
-MAX_REGISTROS_HISTORICO = 100      # tope del histórico WACC (evita crecer sin fin)
+MAX_REGISTROS_HISTORICO = 100      # tope del histórico del E3 (evita crecer sin fin)
 MAX_MONTO = 1_000_000_000_000.0    # tope de montos (1 billón de soles)
 
 # Logo corporativo embebido en base64 (autocontenido: no requiere internet
@@ -137,12 +137,10 @@ VALORES_FORMULARIO = {
     "e2_categoria": "Tecnología",
     "e2_precio": 0.0,
     "e2_cantidad": 1,
-    # --- Ejercicio 3: parametros del WACC ---
-    "e3_deuda": 400000.0,
-    "e3_patrimonio": 600000.0,
-    "e3_impuesto": 29.5,
-    "e3_kd": 8.0,
-    "e3_ke": 15.0,
+    # --- Ejercicio 3: parametros del prestamo (sistema frances) ---
+    "e3_monto": 50000.0,
+    "e3_tasa": 18.0,
+    "e3_plazo": 24,
     # --- Ejercicio 4: creacion de proyectos de inversion ---
     "e4_nombre": "",
     "e4_inversion": 100000.0,
@@ -498,9 +496,9 @@ if "arr_productos" not in st.session_state:
     st.session_state.arr_cantidades = np.array([], dtype=int)     # cantidades
     st.session_state.arr_totales = np.array([], dtype=float)      # totales
 
-# Ejercicio 3: histórico de resultados de la función WACC
-if "historico_wacc" not in st.session_state:
-    st.session_state.historico_wacc = []
+# Ejercicio 3: histórico de resultados de la función de préstamo francés
+if "historico_prestamo" not in st.session_state:
+    st.session_state.historico_prestamo = []
 
 # Ejercicio 4: diccionario {nombre_proyecto: objeto ProyectoInversion}
 if "proyectos" not in st.session_state:
@@ -523,7 +521,7 @@ OPCIONES_MENU = {
     "🏠  Home": "Home",
     "💰  E1 · Flujo de Caja": "Ejercicio 1",
     "📦  E2 · Registro NumPy": "Ejercicio 2",
-    "📊  E3 · Cálculo WACC": "Ejercicio 3",
+    "📊  E3 · Préstamo Francés": "Ejercicio 3",
     "🏗️  E4 · CRUD Inversiones": "Ejercicio 4",
 }
 
@@ -599,7 +597,7 @@ def mostrar_home():
 
     - **Ejercicio 1:** Flujo de caja con listas.
     - **Ejercicio 2:** Registro de productos con arrays de NumPy y DataFrame.
-    - **Ejercicio 3:** Cálculo del WACC usando una función de librería externa.
+    - **Ejercicio 3:** Cálculo de la cuota de un préstamo (sistema francés) usando una función de librería externa.
     - **Ejercicio 4:** CRUD de proyectos de inversión usando una clase (POO).
 
     ### 🛠️ Tecnologías utilizadas
@@ -894,52 +892,54 @@ def mostrar_ejercicio2():
 
 
 # =============================================================================
-# EJERCICIO 3 - FUNCIÓN DE LIBRERÍA EXTERNA: CÁLCULO DEL WACC
+# EJERCICIO 3 - FUNCIÓN DE LIBRERÍA EXTERNA: CUOTA DE PRÉSTAMO (SISTEMA FRANCÉS)
 # =============================================================================
-def calcular_y_registrar_wacc() -> None:
+def calcular_y_registrar_prestamo() -> None:
     """
-    Callback del boton "Calcular WACC": ejecuta la funcion de la libreria,
+    Callback del boton "Calcular cuota": ejecuta la funcion de la libreria,
     guarda el resultado en el historico y deja los parametros en sus valores
     iniciales para el siguiente escenario.
     """
-    deuda = float(st.session_state.e3_deuda)
-    patrimonio = float(st.session_state.e3_patrimonio)
+    monto = float(st.session_state.e3_monto)
+    tasa = float(st.session_state.e3_tasa)
+    plazo = int(st.session_state.e3_plazo)
 
-    # Validación previa: V = D + E no puede ser cero
-    if deuda + patrimonio <= 0:
+    # Validación previa: el monto y el plazo deben ser mayores a cero
+    if monto <= 0 or plazo <= 0:
         apilar_mensaje("msg_e3", "error",
-                       "⚠️ La suma de deuda y patrimonio debe ser mayor a cero.")
+                       "⚠️ El monto y el plazo deben ser mayores a cero.")
         return
 
     try:
-        resultado = calcular_wacc(
-            deuda=deuda,
-            patrimonio=patrimonio,
-            costo_deuda_pct=float(st.session_state.e3_kd),
-            costo_patrimonio_pct=float(st.session_state.e3_ke),
-            impuesto_pct=float(st.session_state.e3_impuesto)
+        resultado = calcular_cuota_prestamo_frances(
+            monto=monto,
+            tasa_anual_pct=tasa,
+            plazo_meses=plazo
         )
-        wacc = resultado["wacc_pct"]
+        cuota = resultado["cuota_mensual"]
+        total_pagado = resultado["total_pagado"]
+        interes_total = resultado["interes_total"]
 
         # El resultado se guarda para dibujarlo apenas termine el callback
-        st.session_state.ultimo_wacc = wacc
+        st.session_state.ultimo_prestamo = resultado
         apilar_mensaje(
             "msg_e3", "ok",
-            f"✅ El costo promedio ponderado de capital es **{formatear_numero(wacc)}%**. "
-            "Los proyectos de la empresa deberían rendir por encima de esta tasa."
+            f"✅ La cuota mensual es **{formatear_moneda(cuota)}** durante "
+            f"{plazo} meses. Se pagará un interés total de "
+            f"**{formatear_moneda(interes_total)}**."
         )
 
         # --- Se agrega el resultado al histórico (con tope) ---
-        st.session_state.historico_wacc.append({
-            "Deuda (S/)": deuda,
-            "Patrimonio (S/)": patrimonio,
-            "Kd (%)": float(st.session_state.e3_kd),
-            "Ke (%)": float(st.session_state.e3_ke),
-            "Impuesto (%)": float(st.session_state.e3_impuesto),
-            "WACC (%)": wacc
+        st.session_state.historico_prestamo.append({
+            "Monto (S/)": monto,
+            "Tasa anual (%)": tasa,
+            "Plazo (meses)": plazo,
+            "Cuota mensual (S/)": cuota,
+            "Total pagado (S/)": total_pagado,
+            "Interés total (S/)": interes_total
         })
-        if len(st.session_state.historico_wacc) > MAX_REGISTROS_HISTORICO:
-            st.session_state.historico_wacc.pop(0)
+        if len(st.session_state.historico_prestamo) > MAX_REGISTROS_HISTORICO:
+            st.session_state.historico_prestamo.pop(0)
 
         reiniciar_campos("e3_")   # los parámetros vuelven a su valor inicial
     except (ValueError, ZeroDivisionError) as error:
@@ -948,40 +948,39 @@ def calcular_y_registrar_wacc() -> None:
                        f"⚠️ Error en los datos ingresados: {error}")
     except Exception as error:
         apilar_mensaje("msg_e3", "error",
-                       f"⚠️ Error inesperado al calcular el WACC: {error}")
+                       f"⚠️ Error inesperado al calcular la cuota: {error}")
 
 
-def limpiar_historico_wacc() -> None:
+def limpiar_historico_prestamo() -> None:
     """Vacía el histórico de cálculos del Ejercicio 3."""
-    st.session_state.historico_wacc = []
+    st.session_state.historico_prestamo = []
 
 
 def mostrar_ejercicio3():
-    """Conecta la función calcular_wacc() de la librería externa con widgets."""
+    """Conecta la función calcular_cuota_prestamo_frances() de la librería con widgets."""
     encabezado_hero(
         "E3 · Función externa",
-        "Cálculo del WACC",
-        "Costo promedio ponderado de capital con calcular_wacc() de la librería del curso"
+        "Cuota de Préstamo (Sistema Francés)",
+        "Cálculo de la cuota mensual con calcular_cuota_prestamo_frances() de la librería del curso"
     )
 
     st.markdown("""
-    **Descripción:** se utiliza la función `calcular_wacc()` del archivo
-    `libreria_funciones_proyecto1.py`, seleccionada por su relación con el
-    área financiera. El **WACC** (*Weighted Average Cost of Capital*) es el
-    costo promedio ponderado de capital de una empresa: la tasa mínima de
-    retorno que debe exigirse a un proyecto para crear valor.
+    **Descripción:** se utiliza la función `calcular_cuota_prestamo_frances()`
+    del archivo `libreria_funciones_proyecto1.py`, seleccionada por su relación
+    con el área financiera. El **sistema francés** es el método de amortización
+    más usado: se paga una **cuota mensual fija** que combina capital e
+    intereses durante todo el plazo del préstamo.
 
-    **Fórmula:**  `WACC = (D/V) × Kd × (1 - T) + (E/V) × Ke`
+    **Fórmula:**  `Cuota = M × [ i × (1 + i)ⁿ ] / [ (1 + i)ⁿ − 1 ]`
 
-    donde **D** = deuda, **E** = patrimonio, **V** = D + E,
-    **Kd** = costo de la deuda, **Ke** = costo del patrimonio y
-    **T** = tasa de impuestos.
+    donde **M** = monto del préstamo, **i** = tasa de interés mensual
+    (tasa anual ÷ 12) y **n** = número de cuotas (plazo en meses).
     """)
 
     # --- Selector de función (requisito de la interfaz) ---
     st.selectbox(
         "Función seleccionada de la librería:",
-        ["calcular_wacc - Costo promedio ponderado de capital"],
+        ["calcular_cuota_prestamo_frances - Cuota mensual de un préstamo"],
         help="Función elegida de libreria_funciones_proyecto1.py (área financiera)."
     )
 
@@ -989,58 +988,47 @@ def mostrar_ejercicio3():
     col1, col2 = st.columns(2)
     with col1:
         st.number_input(
-            "Deuda total (S/)",
-            min_value=0.0, max_value=MAX_MONTO, step=10000.0,
-            key="e3_deuda",
-            help="D: financiamiento con terceros (préstamos, bonos). Puede ser 0, "
-                 "pero deuda y patrimonio no pueden ser 0 a la vez."
+            "Monto del préstamo (S/)",
+            min_value=0.0, max_value=MAX_MONTO, step=1000.0,
+            key="e3_monto",
+            help="M: capital solicitado en préstamo."
         )
         st.number_input(
-            "Patrimonio total (S/)",
-            min_value=0.0, max_value=MAX_MONTO, step=10000.0,
-            key="e3_patrimonio",
-            help="E: aporte de los accionistas (capital propio)."
-        )
-        st.number_input(
-            "Tasa de impuestos (%)",
+            "Tasa de interés anual (%)",
             min_value=0.0, max_value=100.0,
-            key="e3_impuesto",
-            help="T: tasa del Impuesto a la Renta. En Perú la tasa general "
-                 "de tercera categoría es 29.5%."
+            key="e3_tasa",
+            help="Tasa nominal anual. Se divide entre 12 para obtener la tasa mensual."
         )
     with col2:
         st.number_input(
-            "Costo de la deuda Kd (%)",
-            min_value=0.0, max_value=100.0,
-            key="e3_kd",
-            help="Kd: tasa de interés promedio que la empresa paga por su deuda."
-        )
-        st.number_input(
-            "Costo del patrimonio Ke (%)",
-            min_value=0.0, max_value=100.0,
-            key="e3_ke",
-            help="Ke: rentabilidad mínima exigida por los accionistas "
-                 "(usualmente estimada con el modelo CAPM)."
+            "Plazo (meses)",
+            min_value=1, max_value=600, step=1,
+            key="e3_plazo",
+            help="n: número de cuotas mensuales en las que se pagará el préstamo."
         )
 
     # --- Botón para ejecutar la función ---
-    st.button("🧮 Calcular WACC", on_click=calcular_y_registrar_wacc)
+    st.button("🧮 Calcular cuota", on_click=calcular_y_registrar_prestamo)
 
     # --- Resultado en pantalla (solo en la corrida posterior al cálculo) ---
-    wacc_reciente = st.session_state.pop("ultimo_wacc", None)
-    if wacc_reciente is not None:
-        st.metric("WACC calculado", f"{formatear_numero(wacc_reciente)} %")
+    prestamo_reciente = st.session_state.pop("ultimo_prestamo", None)
+    if prestamo_reciente is not None:
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Cuota mensual", formatear_moneda(prestamo_reciente["cuota_mensual"]))
+        m2.metric("Total pagado", formatear_moneda(prestamo_reciente["total_pagado"]))
+        m3.metric("Interés total", formatear_moneda(prestamo_reciente["interes_total"]))
     mostrar_mensajes("msg_e3")
 
     st.markdown("---")
 
     # --- Tabla histórica de resultados ---
-    if len(st.session_state.historico_wacc) > 0:
+    if len(st.session_state.historico_prestamo) > 0:
         st.subheader("📄 Histórico de cálculos")
         try:
-            df_historico = pd.DataFrame(st.session_state.historico_wacc)
+            df_historico = pd.DataFrame(st.session_state.historico_prestamo)
             df_vista = df_historico.copy()
-            for col in ("Deuda (S/)", "Patrimonio (S/)"):
+            for col in ("Monto (S/)", "Cuota mensual (S/)",
+                        "Total pagado (S/)", "Interés total (S/)"):
                 df_vista[col] = df_vista[col].map(formatear_moneda)
             st.dataframe(df_vista, width="stretch")
         except Exception as error:
@@ -1049,8 +1037,8 @@ def mostrar_ejercicio3():
         boton_limpiar_confirmado(
             "🗑️ Limpiar histórico",
             "e3",
-            limpiar_historico_wacc,
-            f"⚠️ Se eliminarán los {len(st.session_state.historico_wacc)} cálculos "
+            limpiar_historico_prestamo,
+            f"⚠️ Se eliminarán los {len(st.session_state.historico_prestamo)} cálculos "
             "del histórico. Esta acción no se puede deshacer. ¿Deseas continuar?"
         )
     else:
