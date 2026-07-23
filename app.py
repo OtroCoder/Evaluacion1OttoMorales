@@ -1257,14 +1257,15 @@ def mostrar_ejercicio4():
                 st.markdown(
                     """
                     <style>
-                    .st-key-sel_detalle_proyecto div[data-baseweb="select"] > div {
+                    /* Caja del desplegable (control cerrado): fondo naranja */
+                    .st-key-sel_detalle_proyecto div[data-baseweb="select"] > div,
+                    .st-key-sel_detalle_proyecto div[data-baseweb="select"] > div > div {
                         background-color: #f17507 !important;
-                        border: 2px solid #cf480e !important;
+                        border-color: #cf480e !important;
                         border-radius: 10px !important;
                     }
-                    .st-key-sel_detalle_proyecto div[data-baseweb="select"] div,
-                    .st-key-sel_detalle_proyecto div[data-baseweb="select"] span,
-                    .st-key-sel_detalle_proyecto div[data-baseweb="select"] input {
+                    /* Texto del valor seleccionado: blanco, negrita y más grande */
+                    .st-key-sel_detalle_proyecto div[data-baseweb="select"] * {
                         color: #ffffff !important;
                         font-size: 1.25rem !important;
                         font-weight: 800 !important;
