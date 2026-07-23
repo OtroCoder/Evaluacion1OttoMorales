@@ -1237,10 +1237,26 @@ def mostrar_ejercicio4():
                 st.markdown(tabla_html, unsafe_allow_html=True)
 
                 # Detalle individual del proyecto seleccionado
+                st.markdown(
+                    """
+                    <div style="background:linear-gradient(90deg,#0ad9d8,#08a9a8);
+                                padding:12px 22px;border-radius:12px;margin:18px 0 6px 0;
+                                box-shadow:0 3px 12px rgba(10,217,216,.25);">
+                      <span style="font-size:1.45rem;font-weight:800;color:#06333a;">
+                        🔎 Ver detalle de un proyecto
+                      </span>
+                      <span style="font-size:1.0rem;color:#06333a;margin-left:8px;">
+                        — elige un proyecto en la lista de abajo
+                      </span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
                 seleccionado = st.selectbox(
                     "Ver detalle de:",
                     list(st.session_state.proyectos.keys()),
-                    help="Selecciona un proyecto para ver sus indicadores."
+                    help="Selecciona un proyecto para ver sus indicadores.",
+                    label_visibility="collapsed"
                 )
                 resumen = st.session_state.proyectos[seleccionado].resumen()
 
