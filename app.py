@@ -1252,11 +1252,36 @@ def mostrar_ejercicio4():
                     """,
                     unsafe_allow_html=True
                 )
+                # CSS apuntado SOLO a este selector: fondo naranja de la paleta,
+                # letra más grande y en negrita (usa la clase st-key-<key>).
+                st.markdown(
+                    """
+                    <style>
+                    .st-key-sel_detalle_proyecto div[data-baseweb="select"] > div {
+                        background-color: #f17507 !important;
+                        border: 2px solid #cf480e !important;
+                        border-radius: 10px !important;
+                    }
+                    .st-key-sel_detalle_proyecto div[data-baseweb="select"] div,
+                    .st-key-sel_detalle_proyecto div[data-baseweb="select"] span,
+                    .st-key-sel_detalle_proyecto div[data-baseweb="select"] input {
+                        color: #ffffff !important;
+                        font-size: 1.25rem !important;
+                        font-weight: 800 !important;
+                    }
+                    .st-key-sel_detalle_proyecto div[data-baseweb="select"] svg {
+                        fill: #ffffff !important;
+                    }
+                    </style>
+                    """,
+                    unsafe_allow_html=True
+                )
                 seleccionado = st.selectbox(
                     "Ver detalle de:",
                     list(st.session_state.proyectos.keys()),
                     help="Selecciona un proyecto para ver sus indicadores.",
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
+                    key="sel_detalle_proyecto"
                 )
                 resumen = st.session_state.proyectos[seleccionado].resumen()
 
