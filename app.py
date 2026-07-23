@@ -64,7 +64,7 @@ except ImportError as error_importacion:
 # =============================================================================
 # Versión visible de la app: se incrementa en cada cambio subido a GitHub,
 # para confirmar de un vistazo que el despliegue tomó la última versión.
-VERSION = "V1.2"
+VERSION = "V1.4"
 
 PALETA = {
     "fondo": "#fbfbfb",       # gris casi blanco (fondo general)
@@ -1353,17 +1353,57 @@ def mostrar_ejercicio4():
 
                 df_flujo = pd.DataFrame(filas_flujo)
 
-                # Vista con montos formateados en soles
-                df_flujo_vista = df_flujo.copy()
-                for col in ("Flujo (S/)", "Valor presente (S/)", "VPN acumulado (S/)"):
-                    df_flujo_vista[col] = df_flujo_vista[col].map(formatear_moneda)
-                st.dataframe(df_flujo_vista, width="stretch", hide_index=True)
+                # --- Tabla del flujo en HTML: nítida, con colores y fuente grande ---
+                def _color_monto(valor):
+                    # Rojo para salidas/negativos, verde para positivos
+                    return "#cf480e" if valor < 0 else "#1a7f37"
 
-                st.caption(
-                    f"💡 La última fila de **VPN acumulado** "
-                    f"({formatear_moneda(vpn_acumulado)}) coincide con el VPN "
-                    f"calculado por el método `calcular_vpn()` de la clase. "
-                    f"Tasa de descuento: {formatear_numero(proyecto_sel.tasa_descuento_pct)}%."
+                filas_html_fc = ""
+                for j, fila in df_flujo.iterrows():
+                    es_ano0 = fila["Año"] == 0
+                    fondo = "#fdf1e8" if es_ano0 else ("#ffffff" if j % 2 else "#f4fdfd")
+                    etiqueta_ano = ("0 · Inversión" if es_ano0 else str(int(fila["Año"])))
+                    filas_html_fc += (
+                        f'<tr style="background:{fondo};">'
+                        f'<td style="padding:12px 16px;text-align:center;font-weight:700;color:#06333a;">{etiqueta_ano}</td>'
+                        f'<td style="padding:12px 16px;text-align:right;font-weight:700;color:{_color_monto(fila["Flujo (S/)"])};">{formatear_moneda(fila["Flujo (S/)"])}</td>'
+                        f'<td style="padding:12px 16px;text-align:center;color:#334;">{fila["Factor descuento"]:.4f}</td>'
+                        f'<td style="padding:12px 16px;text-align:right;color:{_color_monto(fila["Valor presente (S/)"])};">{formatear_moneda(fila["Valor presente (S/)"])}</td>'
+                        f'<td style="padding:12px 16px;text-align:right;font-weight:800;color:{_color_monto(fila["VPN acumulado (S/)"])};">{formatear_moneda(fila["VPN acumulado (S/)"])}</td>'
+                        f'</tr>'
+                    )
+
+                tabla_html_fc = (
+                    '<div style="overflow-x:auto;margin-bottom:6px;">'
+                    '<table style="width:100%;border-collapse:collapse;font-size:1.1rem;'
+                    'border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.08);">'
+                    '<thead><tr style="background:#0ad9d8;color:#06333a;font-size:1.05rem;">'
+                    '<th style="padding:14px 16px;text-align:center;">Año</th>'
+                    '<th style="padding:14px 16px;text-align:right;">Flujo (S/)</th>'
+                    '<th style="padding:14px 16px;text-align:center;">Factor descuento</th>'
+                    '<th style="padding:14px 16px;text-align:right;">Valor presente (S/)</th>'
+                    '<th style="padding:14px 16px;text-align:right;">VPN acumulado (S/)</th>'
+                    '</tr></thead>'
+                    f'<tbody>{filas_html_fc}</tbody></table></div>'
+                )
+                st.markdown(tabla_html_fc, unsafe_allow_html=True)
+
+                st.markdown(
+                    f"""
+                    <div style="background:#eefcfb;border-left:5px solid #0ad9d8;
+                                border-radius:8px;padding:12px 16px;margin:8px 0;
+                                color:#06333a;font-size:1.02rem;line-height:1.5;">
+                      💡 La última fila de <b>VPN acumulado</b>
+                      (<b>{formatear_moneda(vpn_acumulado)}</b>) coincide con el VPN
+                      calculado por el método <code>calcular_vpn()</code> de la clase.
+                      <span style="display:inline-block;margin-top:6px;background:#f17507;
+                                   color:#fff;font-weight:800;padding:3px 12px;
+                                   border-radius:20px;">
+                        Tasa de descuento: {formatear_numero(proyecto_sel.tasa_descuento_pct)}%
+                      </span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
                 )
 
                 # Botón de descarga: CSV con los valores numéricos (sin formato)
