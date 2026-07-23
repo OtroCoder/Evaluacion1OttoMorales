@@ -1181,7 +1181,19 @@ def mostrar_ejercicio4():
     # LEER: muestra todos los proyectos con sus indicadores calculados
     # -------------------------------------------------------------------------
     with tab_leer:
-        st.subheader("Proyectos registrados")
+        # Encabezado notorio de la lista de proyectos
+        st.markdown(
+            """
+            <div style="background:linear-gradient(90deg,#f17507,#cf480e);
+                        padding:14px 22px;border-radius:12px;margin-bottom:14px;
+                        box-shadow:0 3px 12px rgba(207,72,14,.25);">
+              <span style="font-size:1.7rem;font-weight:800;color:#fff;">
+                📋 Lista de proyectos registrados
+              </span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
         if len(st.session_state.proyectos) > 0:
             try:
@@ -1191,9 +1203,38 @@ def mostrar_ejercicio4():
                 df_proyectos = pd.DataFrame(resumenes)
                 df_proyectos.columns = ["Proyecto", "VPN (S/)", "ROI (%)",
                                         "Payback (años)", "Decisión"]
-                df_vista = df_proyectos.copy()
-                df_vista["VPN (S/)"] = df_vista["VPN (S/)"].map(formatear_moneda)
-                st.dataframe(df_vista, width="stretch")
+
+                # --- Tabla en HTML con fuente grande y colores (más notoria) ---
+                filas_html = ""
+                for i, fila in df_proyectos.iterrows():
+                    fondo = "#ffffff" if i % 2 == 0 else "#fdf1e8"
+                    viable = fila["Decisión"] == "Viable"
+                    color_dec = "#1a7f37" if viable else "#cf480e"
+                    icono_dec = "✅" if viable else "❌"
+                    filas_html += (
+                        f'<tr style="background:{fondo};">'
+                        f'<td style="padding:14px 18px;font-weight:700;">{fila["Proyecto"]}</td>'
+                        f'<td style="padding:14px 18px;text-align:right;">{formatear_moneda(fila["VPN (S/)"])}</td>'
+                        f'<td style="padding:14px 18px;text-align:right;">{formatear_numero(fila["ROI (%)"])} %</td>'
+                        f'<td style="padding:14px 18px;text-align:right;">{formatear_numero(fila["Payback (años)"])}</td>'
+                        f'<td style="padding:14px 18px;text-align:center;font-weight:800;color:{color_dec};">{icono_dec} {fila["Decisión"]}</td>'
+                        f'</tr>'
+                    )
+
+                tabla_html = (
+                    '<div style="overflow-x:auto;margin-bottom:8px;">'
+                    '<table style="width:100%;border-collapse:collapse;font-size:1.2rem;'
+                    'border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.08);">'
+                    '<thead><tr style="background:#0ad9d8;color:#08343a;font-size:1.15rem;">'
+                    '<th style="padding:16px 18px;text-align:left;">Proyecto</th>'
+                    '<th style="padding:16px 18px;text-align:right;">VPN (S/)</th>'
+                    '<th style="padding:16px 18px;text-align:right;">ROI (%)</th>'
+                    '<th style="padding:16px 18px;text-align:right;">Payback (años)</th>'
+                    '<th style="padding:16px 18px;text-align:center;">Decisión</th>'
+                    '</tr></thead>'
+                    f'<tbody>{filas_html}</tbody></table></div>'
+                )
+                st.markdown(tabla_html, unsafe_allow_html=True)
 
                 # Detalle individual del proyecto seleccionado
                 seleccionado = st.selectbox(
