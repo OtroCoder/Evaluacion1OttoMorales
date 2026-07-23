@@ -116,6 +116,108 @@ def limpiar_texto(texto: str) -> str:
     return limpio.strip()
 
 
+# =============================================================================
+# VALORES POR DEFECTO DE LOS FORMULARIOS
+# -----------------------------------------------------------------------------
+# Cada campo de entrada tiene una clave (key) registrada en st.session_state.
+# Este diccionario define su valor inicial y, sobre todo, el valor al que
+# vuelve el campo despues de un registro exitoso: asi el formulario queda
+# limpio y listo para el siguiente ingreso.
+# =============================================================================
+MAX_ANIOS_FLUJOS = 10          # horizonte maximo de flujos en el Ejercicio 4
+VALOR_FLUJO_INICIAL = 40000.0  # flujo anual sugerido por defecto
+
+VALORES_FORMULARIO = {
+    # --- Ejercicio 1: flujo de caja ---
+    "e1_concepto": "",
+    "e1_tipo": "Ingreso",
+    "e1_valor": 0.0,
+    # --- Ejercicio 2: registro de productos con NumPy ---
+    "e2_nombre": "",
+    "e2_categoria": "Tecnología",
+    "e2_precio": 0.0,
+    "e2_cantidad": 1,
+    # --- Ejercicio 3: parametros del WACC ---
+    "e3_deuda": 400000.0,
+    "e3_patrimonio": 600000.0,
+    "e3_impuesto": 29.5,
+    "e3_kd": 8.0,
+    "e3_ke": 15.0,
+    # --- Ejercicio 4: creacion de proyectos de inversion ---
+    "e4_nombre": "",
+    "e4_inversion": 100000.0,
+    "e4_tasa": 12.0,
+    "e4_anios": 3,
+}
+
+# Los flujos anuales del Ejercicio 4 son dinamicos: se prepara una clave por año
+for _anio in range(MAX_ANIOS_FLUJOS):
+    VALORES_FORMULARIO[f"flujo_{_anio}"] = VALOR_FLUJO_INICIAL
+
+
+def inicializar_formularios() -> None:
+    """Crea en session_state las claves de los campos que aun no existen."""
+    for clave, valor in VALORES_FORMULARIO.items():
+        st.session_state.setdefault(clave, valor)
+
+
+def reiniciar_campos(*prefijos: str) -> None:
+    """
+    Devuelve a su valor inicial todos los campos cuya clave empieza con
+    alguno de los prefijos indicados.
+
+    Solo debe invocarse desde un callback (parametro on_click del boton).
+    Streamlit ejecuta los callbacks ANTES de volver a dibujar los widgets,
+    por lo que en ese momento si esta permitido reasignar en session_state
+    la clave de un widget; hacerlo despues de dibujarlo lanza excepcion.
+    """
+    for clave, valor in VALORES_FORMULARIO.items():
+        if clave.startswith(prefijos):
+            st.session_state[clave] = valor
+
+
+def apilar_mensaje(clave: str, tipo: str, texto: str) -> None:
+    """Guarda un mensaje generado dentro de un callback para mostrarlo luego."""
+    st.session_state.setdefault(clave, []).append((tipo, texto))
+
+
+def mostrar_mensajes(clave: str) -> None:
+    """Muestra (y consume) los mensajes pendientes de un formulario."""
+    despachador = {"ok": st.success, "error": st.error, "aviso": st.warning}
+    for tipo, texto in st.session_state.pop(clave, []):
+        despachador.get(tipo, st.info)(texto)
+
+
+def boton_limpiar_confirmado(etiqueta: str, clave: str, accion,
+                             advertencia: str) -> None:
+    """
+    Boton destructivo en dos pasos.
+
+    El primer clic no borra nada: activa una bandera en session_state que
+    despliega la advertencia junto a los botones de confirmar o cancelar.
+    Solo el boton de confirmacion ejecuta la funcion `accion`.
+    """
+    bandera = f"confirmar_{clave}"
+
+    if not st.session_state.get(bandera, False):
+        if st.button(etiqueta, key=f"btn_{clave}"):
+            st.session_state[bandera] = True
+            st.rerun()
+        return
+
+    st.warning(advertencia)
+    col_si, col_no, _ = st.columns([1, 1, 3])
+    with col_si:
+        if st.button("✅ Sí, eliminar", key=f"si_{clave}"):
+            accion()
+            st.session_state[bandera] = False
+            st.rerun()
+    with col_no:
+        if st.button("↩️ Cancelar", key=f"no_{clave}"):
+            st.session_state[bandera] = False
+            st.rerun()
+
+
 def mostrar_logo(ancho: int = 220) -> None:
     """Muestra el logo corporativo embebido (base64) con el ancho indicado."""
     try:
@@ -351,6 +453,9 @@ if "historico_wacc" not in st.session_state:
 if "proyectos" not in st.session_state:
     st.session_state.proyectos = {}
 
+# Campos de los formularios (concepto, montos, categorías, etc.)
+inicializar_formularios()
+
 # Los estilos se inyectan una sola vez por ejecución del script
 inyectar_estilos()
 
@@ -452,6 +557,43 @@ def mostrar_home():
 # =============================================================================
 # EJERCICIO 1 - FLUJO DE CAJA CON LISTAS
 # =============================================================================
+def agregar_movimiento() -> None:
+    """
+    Callback del boton "Agregar movimiento": valida los datos, registra el
+    movimiento en la lista y deja el formulario limpio para el siguiente.
+    """
+    concepto_limpio = limpiar_texto(st.session_state.e1_concepto)
+    valor = float(st.session_state.e1_valor)
+
+    # Validación: concepto no vacío y valor mayor a cero
+    if concepto_limpio == "":
+        apilar_mensaje("msg_e1", "error", "⚠️ Debes ingresar un concepto válido.")
+        return
+    if valor <= 0:
+        apilar_mensaje("msg_e1", "error", "⚠️ El valor debe ser mayor a cero.")
+        return
+
+    try:
+        st.session_state.movimientos.append({
+            "Concepto": concepto_limpio,
+            "Tipo": st.session_state.e1_tipo,
+            "Valor (S/)": valor
+        })
+        apilar_mensaje(
+            "msg_e1", "ok",
+            f"✅ Movimiento '{concepto_limpio}' agregado correctamente."
+        )
+        reiniciar_campos("e1_")   # el formulario vuelve a su estado inicial
+    except Exception as error:
+        apilar_mensaje("msg_e1", "error",
+                       f"⚠️ No se pudo registrar el movimiento: {error}")
+
+
+def limpiar_movimientos() -> None:
+    """Vacía la lista de movimientos del Ejercicio 1."""
+    st.session_state.movimientos = []
+
+
 def mostrar_ejercicio1():
     """Registra ingresos y gastos en una lista y calcula el saldo final."""
     encabezado_hero(
@@ -471,16 +613,18 @@ def mostrar_ejercicio1():
     # --- Formulario de ingreso de datos ---
     col1, col2, col3 = st.columns(3)
     with col1:
-        concepto = st.text_input(
+        st.text_input(
             "Concepto del movimiento",
             placeholder="Ej: Venta de servicios",
             max_chars=MAX_CARACTERES_TEXTO,
+            key="e1_concepto",
             help="Descripción breve del movimiento (máx. 60 caracteres)."
         )
     with col2:
-        tipo = st.selectbox(
+        st.selectbox(
             "Tipo de movimiento",
             ["Ingreso", "Gasto"],
+            key="e1_tipo",
             help="Ingreso: entrada de dinero. Gasto: salida de dinero."
         )
     with col3:
@@ -490,28 +634,16 @@ def mostrar_ejercicio1():
             max_value=MAX_MONTO,
             step=10.0,
             format="%.2f",
+            key="e1_valor",
             help="Monto en soles, mayor a cero."
         )
         st.caption(f"Se registrará: **{formatear_moneda(valor)}**")
 
     # --- Botón para agregar el movimiento a la lista ---
-    if st.button("➕ Agregar movimiento"):
-        concepto_limpio = limpiar_texto(concepto)
-        # Validación: concepto no vacío y valor mayor a cero
-        if concepto_limpio == "":
-            st.error("⚠️ Debes ingresar un concepto válido.")
-        elif valor <= 0:
-            st.error("⚠️ El valor debe ser mayor a cero.")
-        else:
-            try:
-                st.session_state.movimientos.append({
-                    "Concepto": concepto_limpio,
-                    "Tipo": tipo,
-                    "Valor (S/)": float(valor)
-                })
-                st.success(f"✅ Movimiento '{concepto_limpio}' agregado correctamente.")
-            except Exception as error:
-                st.error(f"⚠️ No se pudo registrar el movimiento: {error}")
+    # El registro se hace en un callback (on_click) para poder limpiar los
+    # campos del formulario inmediatamente después de guardar.
+    st.button("➕ Agregar movimiento", on_click=agregar_movimiento)
+    mostrar_mensajes("msg_e1")
 
     st.markdown("---")
 
@@ -550,10 +682,14 @@ def mostrar_ejercicio1():
         except Exception as error:
             st.error(f"⚠️ Ocurrió un error al procesar los movimientos: {error}")
 
-        # Botón para reiniciar la lista de movimientos
-        if st.button("🗑️ Limpiar movimientos"):
-            st.session_state.movimientos = []
-            st.rerun()
+        # Botón para reiniciar la lista de movimientos (pide confirmación)
+        boton_limpiar_confirmado(
+            "🗑️ Limpiar movimientos",
+            "e1",
+            limpiar_movimientos,
+            f"⚠️ Se eliminarán los {len(st.session_state.movimientos)} movimientos "
+            "registrados. Esta acción no se puede deshacer. ¿Deseas continuar?"
+        )
     else:
         st.info("ℹ️ Aún no hay movimientos registrados. Agrega el primero arriba.")
 
@@ -561,6 +697,55 @@ def mostrar_ejercicio1():
 # =============================================================================
 # EJERCICIO 2 - REGISTRO CON NUMPY, ARRAYS Y DATAFRAME
 # =============================================================================
+def agregar_producto() -> None:
+    """
+    Callback del boton "Agregar registro": valida, agrega el producto a los
+    arrays de NumPy y deja el formulario limpio para el siguiente ingreso.
+    """
+    nombre_limpio = limpiar_texto(st.session_state.e2_nombre)
+    precio = float(st.session_state.e2_precio)
+    cantidad = int(st.session_state.e2_cantidad)
+
+    if nombre_limpio == "":
+        apilar_mensaje("msg_e2", "error",
+                       "⚠️ Debes ingresar un nombre de producto válido.")
+        return
+    if precio <= 0:
+        apilar_mensaje("msg_e2", "error", "⚠️ El precio debe ser mayor a cero.")
+        return
+
+    try:
+        # Advertencia (no bloqueo) si el producto ya fue registrado antes
+        if nombre_limpio in st.session_state.arr_productos:
+            apilar_mensaje(
+                "msg_e2", "aviso",
+                f"ℹ️ '{nombre_limpio}' ya estaba registrado; "
+                "se agregó como un registro adicional."
+            )
+        total = precio * cantidad
+        # np.append crea un nuevo array agregando el elemento al final
+        st.session_state.arr_productos = np.append(st.session_state.arr_productos, nombre_limpio)
+        st.session_state.arr_categorias = np.append(st.session_state.arr_categorias, st.session_state.e2_categoria)
+        st.session_state.arr_precios = np.append(st.session_state.arr_precios, precio)
+        st.session_state.arr_cantidades = np.append(st.session_state.arr_cantidades, cantidad)
+        st.session_state.arr_totales = np.append(st.session_state.arr_totales, total)
+        apilar_mensaje("msg_e2", "ok",
+                       f"✅ Producto '{nombre_limpio}' registrado correctamente.")
+        reiniciar_campos("e2_")   # el formulario vuelve a su estado inicial
+    except Exception as error:
+        apilar_mensaje("msg_e2", "error",
+                       f"⚠️ No se pudo registrar el producto: {error}")
+
+
+def limpiar_registros() -> None:
+    """Vacía los cinco arrays de NumPy del Ejercicio 2."""
+    st.session_state.arr_productos = np.array([], dtype=object)
+    st.session_state.arr_categorias = np.array([], dtype=object)
+    st.session_state.arr_precios = np.array([], dtype=float)
+    st.session_state.arr_cantidades = np.array([], dtype=int)
+    st.session_state.arr_totales = np.array([], dtype=float)
+
+
 def mostrar_ejercicio2():
     """Registra productos en arrays de NumPy y los muestra en un DataFrame."""
     encabezado_hero(
@@ -579,15 +764,17 @@ def mostrar_ejercicio2():
     # --- Formulario de ingreso de datos ---
     col1, col2 = st.columns(2)
     with col1:
-        nombre = st.text_input(
+        st.text_input(
             "Nombre del producto",
             placeholder="Ej: Laptop",
             max_chars=MAX_CARACTERES_TEXTO,
+            key="e2_nombre",
             help="Nombre del producto o servicio (máx. 60 caracteres)."
         )
-        categoria = st.selectbox(
+        st.selectbox(
             "Categoría",
             ["Tecnología", "Alimentos", "Ropa", "Hogar", "Servicios", "Otros"],
+            key="e2_categoria",
             help="Clasificación del producto para el análisis por categoría."
         )
     with col2:
@@ -597,14 +784,15 @@ def mostrar_ejercicio2():
             max_value=MAX_MONTO,
             step=1.0,
             format="%.2f",
+            key="e2_precio",
             help="Precio de venta por unidad, en soles."
         )
-        st.caption(f"Formato es_PE: **{formatear_moneda(precio)}**")
         cantidad = st.number_input(
             "Cantidad",
             min_value=1,
             max_value=1_000_000,
             step=1,
+            key="e2_cantidad",
             help="Número de unidades del registro (entero, mínimo 1)."
         )
 
@@ -613,29 +801,8 @@ def mostrar_ejercicio2():
     st.markdown(f"**Total del registro:** {formatear_moneda(total)}")
 
     # --- Botón para agregar el registro a los arrays ---
-    if st.button("➕ Agregar registro"):
-        nombre_limpio = limpiar_texto(nombre)
-        if nombre_limpio == "":
-            st.error("⚠️ Debes ingresar un nombre de producto válido.")
-        elif precio <= 0:
-            st.error("⚠️ El precio debe ser mayor a cero.")
-        else:
-            try:
-                # Advertencia (no bloqueo) si el producto ya fue registrado antes
-                if nombre_limpio in st.session_state.arr_productos:
-                    st.warning(
-                        f"ℹ️ '{nombre_limpio}' ya estaba registrado; "
-                        "se agregó como un registro adicional."
-                    )
-                # np.append crea un nuevo array agregando el elemento al final
-                st.session_state.arr_productos = np.append(st.session_state.arr_productos, nombre_limpio)
-                st.session_state.arr_categorias = np.append(st.session_state.arr_categorias, categoria)
-                st.session_state.arr_precios = np.append(st.session_state.arr_precios, float(precio))
-                st.session_state.arr_cantidades = np.append(st.session_state.arr_cantidades, int(cantidad))
-                st.session_state.arr_totales = np.append(st.session_state.arr_totales, total)
-                st.success(f"✅ Producto '{nombre_limpio}' registrado correctamente.")
-            except Exception as error:
-                st.error(f"⚠️ No se pudo registrar el producto: {error}")
+    st.button("➕ Agregar registro", on_click=agregar_producto)
+    mostrar_mensajes("msg_e2")
 
     st.markdown("---")
 
@@ -660,13 +827,14 @@ def mostrar_ejercicio2():
         except Exception as error:
             st.error(f"⚠️ Ocurrió un error al mostrar los registros: {error}")
 
-        if st.button("🗑️ Limpiar registros"):
-            st.session_state.arr_productos = np.array([], dtype=object)
-            st.session_state.arr_categorias = np.array([], dtype=object)
-            st.session_state.arr_precios = np.array([], dtype=float)
-            st.session_state.arr_cantidades = np.array([], dtype=int)
-            st.session_state.arr_totales = np.array([], dtype=float)
-            st.rerun()
+        boton_limpiar_confirmado(
+            "🗑️ Limpiar registros",
+            "e2",
+            limpiar_registros,
+            f"⚠️ Se eliminarán los {int(st.session_state.arr_productos.size)} "
+            "productos registrados. Esta acción no se puede deshacer. "
+            "¿Deseas continuar?"
+        )
     else:
         st.info("ℹ️ Aún no hay registros. Agrega el primer producto arriba.")
 
@@ -674,6 +842,66 @@ def mostrar_ejercicio2():
 # =============================================================================
 # EJERCICIO 3 - FUNCIÓN DE LIBRERÍA EXTERNA: CÁLCULO DEL WACC
 # =============================================================================
+def calcular_y_registrar_wacc() -> None:
+    """
+    Callback del boton "Calcular WACC": ejecuta la funcion de la libreria,
+    guarda el resultado en el historico y deja los parametros en sus valores
+    iniciales para el siguiente escenario.
+    """
+    deuda = float(st.session_state.e3_deuda)
+    patrimonio = float(st.session_state.e3_patrimonio)
+
+    # Validación previa: V = D + E no puede ser cero
+    if deuda + patrimonio <= 0:
+        apilar_mensaje("msg_e3", "error",
+                       "⚠️ La suma de deuda y patrimonio debe ser mayor a cero.")
+        return
+
+    try:
+        resultado = calcular_wacc(
+            deuda=deuda,
+            patrimonio=patrimonio,
+            costo_deuda_pct=float(st.session_state.e3_kd),
+            costo_patrimonio_pct=float(st.session_state.e3_ke),
+            impuesto_pct=float(st.session_state.e3_impuesto)
+        )
+        wacc = resultado["wacc_pct"]
+
+        # El resultado se guarda para dibujarlo apenas termine el callback
+        st.session_state.ultimo_wacc = wacc
+        apilar_mensaje(
+            "msg_e3", "ok",
+            f"✅ El costo promedio ponderado de capital es **{formatear_numero(wacc)}%**. "
+            "Los proyectos de la empresa deberían rendir por encima de esta tasa."
+        )
+
+        # --- Se agrega el resultado al histórico (con tope) ---
+        st.session_state.historico_wacc.append({
+            "Deuda (S/)": deuda,
+            "Patrimonio (S/)": patrimonio,
+            "Kd (%)": float(st.session_state.e3_kd),
+            "Ke (%)": float(st.session_state.e3_ke),
+            "Impuesto (%)": float(st.session_state.e3_impuesto),
+            "WACC (%)": wacc
+        })
+        if len(st.session_state.historico_wacc) > MAX_REGISTROS_HISTORICO:
+            st.session_state.historico_wacc.pop(0)
+
+        reiniciar_campos("e3_")   # los parámetros vuelven a su valor inicial
+    except (ValueError, ZeroDivisionError) as error:
+        # Validaciones internas de la librería o división inválida
+        apilar_mensaje("msg_e3", "error",
+                       f"⚠️ Error en los datos ingresados: {error}")
+    except Exception as error:
+        apilar_mensaje("msg_e3", "error",
+                       f"⚠️ Error inesperado al calcular el WACC: {error}")
+
+
+def limpiar_historico_wacc() -> None:
+    """Vacía el histórico de cálculos del Ejercicio 3."""
+    st.session_state.historico_wacc = []
+
+
 def mostrar_ejercicio3():
     """Conecta la función calcular_wacc() de la librería externa con widgets."""
     encabezado_hero(
@@ -706,77 +934,49 @@ def mostrar_ejercicio3():
     # --- Widgets para ingresar los parámetros de la función ---
     col1, col2 = st.columns(2)
     with col1:
-        deuda = st.number_input(
+        st.number_input(
             "Deuda total (S/)",
-            min_value=0.0, max_value=MAX_MONTO, value=400000.0, step=10000.0,
+            min_value=0.0, max_value=MAX_MONTO, step=10000.0,
+            key="e3_deuda",
             help="D: financiamiento con terceros (préstamos, bonos). Puede ser 0, "
                  "pero deuda y patrimonio no pueden ser 0 a la vez."
         )
-        st.caption(f"Formato es_PE: **{formatear_moneda(deuda)}**")
-        patrimonio = st.number_input(
+        st.number_input(
             "Patrimonio total (S/)",
-            min_value=0.0, max_value=MAX_MONTO, value=600000.0, step=10000.0,
+            min_value=0.0, max_value=MAX_MONTO, step=10000.0,
+            key="e3_patrimonio",
             help="E: aporte de los accionistas (capital propio)."
         )
-        st.caption(f"Formato es_PE: **{formatear_moneda(patrimonio)}**")
-        impuesto_pct = st.number_input(
+        st.number_input(
             "Tasa de impuestos (%)",
-            min_value=0.0, max_value=100.0, value=29.5,
+            min_value=0.0, max_value=100.0,
+            key="e3_impuesto",
             help="T: tasa del Impuesto a la Renta. En Perú la tasa general "
                  "de tercera categoría es 29.5%."
         )
     with col2:
-        costo_deuda_pct = st.number_input(
+        st.number_input(
             "Costo de la deuda Kd (%)",
-            min_value=0.0, max_value=100.0, value=8.0,
+            min_value=0.0, max_value=100.0,
+            key="e3_kd",
             help="Kd: tasa de interés promedio que la empresa paga por su deuda."
         )
-        costo_patrimonio_pct = st.number_input(
+        st.number_input(
             "Costo del patrimonio Ke (%)",
-            min_value=0.0, max_value=100.0, value=15.0,
+            min_value=0.0, max_value=100.0,
+            key="e3_ke",
             help="Ke: rentabilidad mínima exigida por los accionistas "
                  "(usualmente estimada con el modelo CAPM)."
         )
 
     # --- Botón para ejecutar la función ---
-    if st.button("🧮 Calcular WACC"):
-        # Validación previa: V = D + E no puede ser cero
-        if deuda + patrimonio <= 0:
-            st.error("⚠️ La suma de deuda y patrimonio debe ser mayor a cero.")
-        else:
-            try:
-                resultado = calcular_wacc(
-                    deuda=deuda,
-                    patrimonio=patrimonio,
-                    costo_deuda_pct=costo_deuda_pct,
-                    costo_patrimonio_pct=costo_patrimonio_pct,
-                    impuesto_pct=impuesto_pct
-                )
-                wacc = resultado["wacc_pct"]
+    st.button("🧮 Calcular WACC", on_click=calcular_y_registrar_wacc)
 
-                # --- Resultado en pantalla ---
-                st.metric("WACC calculado", f"{formatear_numero(wacc)} %")
-                st.success(
-                    f"✅ El costo promedio ponderado de capital es **{formatear_numero(wacc)}%**. "
-                    "Los proyectos de la empresa deberían rendir por encima de esta tasa."
-                )
-
-                # --- Se agrega el resultado al histórico (con tope) ---
-                st.session_state.historico_wacc.append({
-                    "Deuda (S/)": deuda,
-                    "Patrimonio (S/)": patrimonio,
-                    "Kd (%)": costo_deuda_pct,
-                    "Ke (%)": costo_patrimonio_pct,
-                    "Impuesto (%)": impuesto_pct,
-                    "WACC (%)": wacc
-                })
-                if len(st.session_state.historico_wacc) > MAX_REGISTROS_HISTORICO:
-                    st.session_state.historico_wacc.pop(0)
-            except (ValueError, ZeroDivisionError) as error:
-                # Validaciones internas de la librería o división inválida
-                st.error(f"⚠️ Error en los datos ingresados: {error}")
-            except Exception as error:
-                st.error(f"⚠️ Error inesperado al calcular el WACC: {error}")
+    # --- Resultado en pantalla (solo en la corrida posterior al cálculo) ---
+    wacc_reciente = st.session_state.pop("ultimo_wacc", None)
+    if wacc_reciente is not None:
+        st.metric("WACC calculado", f"{formatear_numero(wacc_reciente)} %")
+    mostrar_mensajes("msg_e3")
 
     st.markdown("---")
 
@@ -792,9 +992,13 @@ def mostrar_ejercicio3():
         except Exception as error:
             st.error(f"⚠️ No se pudo mostrar el histórico: {error}")
 
-        if st.button("🗑️ Limpiar histórico"):
-            st.session_state.historico_wacc = []
-            st.rerun()
+        boton_limpiar_confirmado(
+            "🗑️ Limpiar histórico",
+            "e3",
+            limpiar_historico_wacc,
+            f"⚠️ Se eliminarán los {len(st.session_state.historico_wacc)} cálculos "
+            "del histórico. Esta acción no se puede deshacer. ¿Deseas continuar?"
+        )
     else:
         st.info("ℹ️ Aún no hay cálculos en el histórico.")
 
@@ -802,6 +1006,62 @@ def mostrar_ejercicio3():
 # =============================================================================
 # EJERCICIO 4 - CLASE DE LIBRERÍA EXTERNA CON CRUD: ProyectoInversion
 # =============================================================================
+def crear_proyecto() -> None:
+    """
+    Callback del boton "Crear proyecto": instancia el objeto
+    ProyectoInversion, lo guarda en el diccionario y limpia el formulario.
+    """
+    nombre_limpio = limpiar_texto(st.session_state.e4_nombre)
+    anios = int(st.session_state.e4_anios)
+    flujos = [float(st.session_state[f"flujo_{i}"]) for i in range(anios)]
+
+    if nombre_limpio == "":
+        apilar_mensaje("msg_e4", "error",
+                       "⚠️ Debes ingresar un nombre de proyecto válido.")
+        return
+    if nombre_limpio in st.session_state.proyectos:
+        apilar_mensaje("msg_e4", "error",
+                       "⚠️ Ya existe un proyecto con ese nombre. "
+                       "Usa 'Actualizar' para modificarlo.")
+        return
+    if sum(flujos) <= 0:
+        # Guarda: el payback divide entre el flujo promedio; con todos
+        # los flujos en cero se produciría una división entre cero.
+        apilar_mensaje("msg_e4", "error",
+                       "⚠️ Al menos un flujo anual debe ser mayor a cero.")
+        return
+
+    try:
+        # Se instancia el objeto y se guarda en el diccionario
+        proyecto = ProyectoInversion(
+            nombre_proyecto=nombre_limpio,
+            inversion_inicial=float(st.session_state.e4_inversion),
+            flujos=flujos,
+            tasa_descuento_pct=float(st.session_state.e4_tasa)
+        )
+        st.session_state.proyectos[nombre_limpio] = proyecto
+        apilar_mensaje("msg_e4", "ok",
+                       f"✅ Proyecto '{nombre_limpio}' creado correctamente.")
+        reiniciar_campos("e4_", "flujo_")   # formulario limpio
+    except (ValueError, ZeroDivisionError) as error:
+        apilar_mensaje("msg_e4", "error", f"⚠️ Error al crear el proyecto: {error}")
+    except Exception as error:
+        apilar_mensaje("msg_e4", "error",
+                       f"⚠️ Error inesperado al crear el proyecto: {error}")
+
+
+def eliminar_proyecto() -> None:
+    """Quita del diccionario el proyecto seleccionado en la pestaña Eliminar."""
+    nombre = st.session_state.get("sel_eliminar", "")
+    try:
+        # del elimina la clave (y su objeto) del diccionario
+        del st.session_state.proyectos[nombre]
+        apilar_mensaje("msg_e4_del", "ok", f"✅ Proyecto '{nombre}' eliminado.")
+    except KeyError:
+        apilar_mensaje("msg_e4_del", "error",
+                       "⚠️ El proyecto ya no existe en el registro.")
+
+
 def mostrar_ejercicio4():
     """CRUD de proyectos de inversión usando la clase ProyectoInversion."""
     encabezado_hero(
@@ -830,72 +1090,50 @@ def mostrar_ejercicio4():
     with tab_crear:
         st.subheader("Crear un nuevo proyecto")
 
-        nombre_proy = st.text_input(
+        st.text_input(
             "Nombre del proyecto",
             placeholder="Ej: Planta de Arequipa",
             max_chars=MAX_CARACTERES_TEXTO,
+            key="e4_nombre",
             help="Identificador único del proyecto (máx. 60 caracteres)."
         )
         col1, col2 = st.columns(2)
         with col1:
-            inversion = st.number_input(
+            st.number_input(
                 "Inversión inicial (S/)",
-                min_value=0.0, max_value=MAX_MONTO, value=100000.0, step=5000.0,
+                min_value=0.0, max_value=MAX_MONTO, step=5000.0,
+                key="e4_inversion",
                 help="Desembolso en el año 0. Debe ser mayor a cero."
             )
-            st.caption(f"Formato es_PE: **{formatear_moneda(inversion)}**")
-            tasa = st.number_input(
+            st.number_input(
                 "Tasa de descuento (%)",
-                min_value=0.0, max_value=100.0, value=12.0,
+                min_value=0.0, max_value=100.0,
+                key="e4_tasa",
                 help="Tasa para traer los flujos a valor presente; "
                      "usualmente el WACC o el costo de oportunidad (COK)."
             )
         with col2:
             anios = st.number_input(
                 "Número de años de flujos",
-                min_value=1, max_value=10, value=3,
-                help="Horizonte de evaluación del proyecto (1 a 10 años)."
+                min_value=1, max_value=MAX_ANIOS_FLUJOS,
+                key="e4_anios",
+                help=f"Horizonte de evaluación del proyecto (1 a {MAX_ANIOS_FLUJOS} años)."
             )
 
         # Se genera un number_input por cada año de flujo proyectado
         st.markdown("**Flujos de caja anuales proyectados (S/):**")
-        flujos = []
         columnas_flujos = st.columns(int(anios))
         for i, col in enumerate(columnas_flujos):
             with col:
-                flujo = st.number_input(
+                st.number_input(
                     f"Año {i + 1}",
-                    min_value=0.0, max_value=MAX_MONTO, value=40000.0,
+                    min_value=0.0, max_value=MAX_MONTO,
                     step=5000.0, key=f"flujo_{i}",
                     help=f"Flujo de caja neto esperado del año {i + 1}."
                 )
-                flujos.append(float(flujo))
 
-        if st.button("➕ Crear proyecto"):
-            nombre_limpio = limpiar_texto(nombre_proy)
-            if nombre_limpio == "":
-                st.error("⚠️ Debes ingresar un nombre de proyecto válido.")
-            elif nombre_limpio in st.session_state.proyectos:
-                st.error("⚠️ Ya existe un proyecto con ese nombre. Usa 'Actualizar' para modificarlo.")
-            elif sum(flujos) <= 0:
-                # Guarda: el payback divide entre el flujo promedio; con todos
-                # los flujos en cero se produciría una división entre cero.
-                st.error("⚠️ Al menos un flujo anual debe ser mayor a cero.")
-            else:
-                try:
-                    # Se instancia el objeto y se guarda en el diccionario
-                    proyecto = ProyectoInversion(
-                        nombre_proyecto=nombre_limpio,
-                        inversion_inicial=inversion,
-                        flujos=flujos,
-                        tasa_descuento_pct=tasa
-                    )
-                    st.session_state.proyectos[nombre_limpio] = proyecto
-                    st.success(f"✅ Proyecto '{nombre_limpio}' creado correctamente.")
-                except (ValueError, ZeroDivisionError) as error:
-                    st.error(f"⚠️ Error al crear el proyecto: {error}")
-                except Exception as error:
-                    st.error(f"⚠️ Error inesperado al crear el proyecto: {error}")
+        st.button("➕ Crear proyecto", on_click=crear_proyecto)
+        mostrar_mensajes("msg_e4")
 
     # -------------------------------------------------------------------------
     # LEER: muestra todos los proyectos con sus indicadores calculados
@@ -1034,16 +1272,19 @@ def mostrar_ejercicio4():
                 key="sel_eliminar",
                 help="Esta acción quita el proyecto del registro de la sesión."
             )
-            if st.button("🗑️ Eliminar proyecto"):
-                try:
-                    # del elimina la clave (y su objeto) del diccionario
-                    del st.session_state.proyectos[nombre_eliminar]
-                    st.success(f"✅ Proyecto '{nombre_eliminar}' eliminado.")
-                    st.rerun()
-                except KeyError:
-                    st.error("⚠️ El proyecto ya no existe en el registro.")
+            boton_limpiar_confirmado(
+                "🗑️ Eliminar proyecto",
+                "e4",
+                eliminar_proyecto,
+                f"⚠️ Se eliminará definitivamente el proyecto "
+                f"'{nombre_eliminar}'. ¿Deseas continuar?"
+            )
         else:
             st.info("ℹ️ No hay proyectos para eliminar.")
+
+        # El mensaje se muestra fuera del if para que también sea visible
+        # cuando se elimina el último proyecto del registro.
+        mostrar_mensajes("msg_e4_del")
 
 
 # =============================================================================
