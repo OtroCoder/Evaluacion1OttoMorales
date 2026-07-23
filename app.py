@@ -64,7 +64,7 @@ except ImportError as error_importacion:
 # =============================================================================
 # Versión visible de la app: se incrementa en cada cambio subido a GitHub,
 # para confirmar de un vistazo que el despliegue tomó la última versión.
-VERSION = "V1.1"
+VERSION = "V1.2"
 
 PALETA = {
     "fondo": "#fbfbfb",       # gris casi blanco (fondo general)
@@ -1218,71 +1218,82 @@ def mostrar_ejercicio4():
                 df_proyectos.columns = ["Proyecto", "VPN (S/)", "ROI (%)",
                                         "Payback (años)", "Decisión"]
 
-                # --- Tabla en HTML con fuente grande y colores (más notoria) ---
-                filas_html = ""
+                # Nombres en orden (mismo orden que df_proyectos)
+                nombres_proyectos = list(st.session_state.proyectos.keys())
+
+                # Proyecto activo (persistente). Por defecto, el primero.
+                if ("proyecto_detalle" not in st.session_state
+                        or st.session_state.proyecto_detalle not in nombres_proyectos):
+                    st.session_state.proyecto_detalle = nombres_proyectos[0]
+
+                # Instrucción clara
+                st.markdown(
+                    '<div style="font-size:1.15rem;font-weight:700;color:#08343a;'
+                    'margin:2px 0 10px 0;">🔍 Haz clic en la lupa del proyecto que '
+                    'quieras ver en detalle:</div>',
+                    unsafe_allow_html=True
+                )
+
+                # Encabezado de columnas
+                anchos = [0.8, 3, 2.2, 1.6, 1.8, 2]
+                cab = st.columns(anchos, vertical_alignment="center")
+                for col, txt in zip(
+                    cab, ["Ver", "Proyecto", "VPN (S/)", "ROI (%)",
+                          "Payback", "Decisión"]):
+                    col.markdown(
+                        f'<span style="font-weight:800;color:#08343a;">{txt}</span>',
+                        unsafe_allow_html=True
+                    )
+
+                # Una fila por proyecto, con botón-lupa que lo selecciona
                 for i, fila in df_proyectos.iterrows():
-                    fondo = "#ffffff" if i % 2 == 0 else "#fdf1e8"
+                    nombre = fila["Proyecto"]
                     viable = fila["Decisión"] == "Viable"
                     color_dec = "#1a7f37" if viable else "#cf480e"
                     icono_dec = "✅" if viable else "❌"
-                    filas_html += (
-                        f'<tr style="background:{fondo};">'
-                        f'<td style="padding:14px 18px;font-weight:700;">{fila["Proyecto"]}</td>'
-                        f'<td style="padding:14px 18px;text-align:right;">{formatear_moneda(fila["VPN (S/)"])}</td>'
-                        f'<td style="padding:14px 18px;text-align:right;">{formatear_numero(fila["ROI (%)"])} %</td>'
-                        f'<td style="padding:14px 18px;text-align:right;">{formatear_numero(fila["Payback (años)"])}</td>'
-                        f'<td style="padding:14px 18px;text-align:center;font-weight:800;color:{color_dec};">{icono_dec} {fila["Decisión"]}</td>'
-                        f'</tr>'
-                    )
+                    activo = (nombre == st.session_state.proyecto_detalle)
 
-                tabla_html = (
-                    '<div style="overflow-x:auto;margin-bottom:8px;">'
-                    '<table style="width:100%;border-collapse:collapse;font-size:1.2rem;'
-                    'border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.08);">'
-                    '<thead><tr style="background:#0ad9d8;color:#08343a;font-size:1.15rem;">'
-                    '<th style="padding:16px 18px;text-align:left;">Proyecto</th>'
-                    '<th style="padding:16px 18px;text-align:right;">VPN (S/)</th>'
-                    '<th style="padding:16px 18px;text-align:right;">ROI (%)</th>'
-                    '<th style="padding:16px 18px;text-align:right;">Payback (años)</th>'
-                    '<th style="padding:16px 18px;text-align:center;">Decisión</th>'
-                    '</tr></thead>'
-                    f'<tbody>{filas_html}</tbody></table></div>'
-                )
-                st.markdown(tabla_html, unsafe_allow_html=True)
+                    cols = st.columns(anchos, vertical_alignment="center")
+                    if cols[0].button(
+                        "🔍", key=f"ver_{nombre}",
+                        help=f"Ver detalle de {nombre}",
+                        type="primary" if activo else "secondary"
+                    ):
+                        st.session_state.proyecto_detalle = nombre
+                        st.rerun()
 
-                # Detalle individual del proyecto seleccionado
-                st.markdown(
-                    """
-                    <div style="background:linear-gradient(90deg,#0ad9d8,#08a9a8);
-                                padding:12px 22px;border-radius:12px;margin:18px 0 6px 0;
-                                box-shadow:0 3px 12px rgba(10,217,216,.25);">
-                      <span style="font-size:1.45rem;font-weight:800;color:#06333a;">
-                        🔎 Ver detalle de un proyecto
-                      </span>
-                      <span style="font-size:1.0rem;color:#06333a;margin-left:8px;">
-                        — elige un proyecto en la lista de abajo
-                      </span>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-                seleccionado = st.selectbox(
-                    "Ver detalle de:",
-                    list(st.session_state.proyectos.keys()),
-                    help="Selecciona un proyecto para ver sus indicadores.",
-                    label_visibility="collapsed",
-                    key="sel_detalle_proyecto"
-                )
+                    marca = "▶ " if activo else ""
+                    peso = "800" if activo else "600"
+                    cols[1].markdown(
+                        f'<span style="font-weight:{peso};font-size:1.1rem;">'
+                        f'{marca}{nombre}</span>', unsafe_allow_html=True)
+                    cols[2].markdown(
+                        f'<span style="font-size:1.05rem;">'
+                        f'{formatear_moneda(fila["VPN (S/)"])}</span>',
+                        unsafe_allow_html=True)
+                    cols[3].markdown(
+                        f'<span style="font-size:1.05rem;">'
+                        f'{formatear_numero(fila["ROI (%)"])} %</span>',
+                        unsafe_allow_html=True)
+                    cols[4].markdown(
+                        f'<span style="font-size:1.05rem;">'
+                        f'{formatear_numero(fila["Payback (años)"])}</span>',
+                        unsafe_allow_html=True)
+                    cols[5].markdown(
+                        f'<span style="font-weight:800;color:{color_dec};">'
+                        f'{icono_dec} {fila["Decisión"]}</span>',
+                        unsafe_allow_html=True)
 
-                # Chip naranja con el proyecto elegido (render HTML garantizado):
-                # fondo de contraste de la paleta, texto blanco, grande y en negrita.
+                seleccionado = st.session_state.proyecto_detalle
+
+                # Banner del proyecto activo (contraste naranja de la paleta)
                 st.markdown(
                     f"""
                     <div style="background:#f17507;border:2px solid #cf480e;
-                                border-radius:10px;padding:12px 20px;margin:6px 0 4px 0;
+                                border-radius:10px;padding:12px 20px;margin:16px 0 4px 0;
                                 box-shadow:0 3px 12px rgba(207,72,14,.25);">
                       <span style="color:#ffffff;font-size:1.35rem;font-weight:800;">
-                        📌 {seleccionado}
+                        📌 Detalle de: {seleccionado}
                       </span>
                     </div>
                     """,
