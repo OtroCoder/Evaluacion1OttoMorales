@@ -1224,6 +1224,58 @@ def mostrar_ejercicio4():
                     st.success(f"✅ El proyecto '{seleccionado}' es **VIABLE** (VPN positivo).")
                 else:
                     st.error(f"❌ El proyecto '{seleccionado}' **NO es viable** (VPN negativo).")
+
+                # -------------------------------------------------------------
+                # Flujo de caja del proyecto (año 0 = inversión inicial)
+                # -------------------------------------------------------------
+                # Se reconstruye el cronograma a partir de los atributos del
+                # objeto para validar el VPN año por año: la última fila de la
+                # columna "VPN acumulado" coincide con la métrica VPN de arriba.
+                st.markdown("---")
+                st.subheader("📆 Flujo de caja del proyecto")
+
+                proyecto_sel = st.session_state.proyectos[seleccionado]
+                tasa = proyecto_sel.tasa_descuento_pct / 100
+
+                filas_flujo = []
+                vpn_acumulado = 0.0
+                # Año 0: la inversión inicial se registra como salida (negativa)
+                flujos_completos = [-proyecto_sel.inversion_inicial] + list(proyecto_sel.flujos)
+                for anio, flujo in enumerate(flujos_completos):
+                    factor = 1 / ((1 + tasa) ** anio)
+                    valor_presente = flujo * factor
+                    vpn_acumulado += valor_presente
+                    filas_flujo.append({
+                        "Año": anio,
+                        "Flujo (S/)": round(flujo, 2),
+                        "Factor descuento": round(factor, 6),
+                        "Valor presente (S/)": round(valor_presente, 2),
+                        "VPN acumulado (S/)": round(vpn_acumulado, 2),
+                    })
+
+                df_flujo = pd.DataFrame(filas_flujo)
+
+                # Vista con montos formateados en soles
+                df_flujo_vista = df_flujo.copy()
+                for col in ("Flujo (S/)", "Valor presente (S/)", "VPN acumulado (S/)"):
+                    df_flujo_vista[col] = df_flujo_vista[col].map(formatear_moneda)
+                st.dataframe(df_flujo_vista, width="stretch", hide_index=True)
+
+                st.caption(
+                    f"💡 La última fila de **VPN acumulado** "
+                    f"({formatear_moneda(vpn_acumulado)}) coincide con el VPN "
+                    f"calculado por el método `calcular_vpn()` de la clase. "
+                    f"Tasa de descuento: {formatear_numero(proyecto_sel.tasa_descuento_pct)}%."
+                )
+
+                # Botón de descarga: CSV con los valores numéricos (sin formato)
+                csv_flujo = df_flujo.to_csv(index=False).encode("utf-8-sig")
+                st.download_button(
+                    "⬇️ Descargar flujo de caja (CSV)",
+                    data=csv_flujo,
+                    file_name=f"flujo_caja_{seleccionado}.csv",
+                    mime="text/csv"
+                )
             except (ValueError, ZeroDivisionError) as error:
                 st.error(f"⚠️ Error al calcular los indicadores: {error}")
             except Exception as error:
