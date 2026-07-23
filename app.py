@@ -62,6 +62,10 @@ except ImportError as error_importacion:
 # =============================================================================
 # CONSTANTES DE LA APLICACIÓN
 # =============================================================================
+# Versión visible de la app: se incrementa en cada cambio subido a GitHub,
+# para confirmar de un vistazo que el despliegue tomó la última versión.
+VERSION = "V1.1"
+
 PALETA = {
     "fondo": "#fbfbfb",       # gris casi blanco (fondo general)
     "turquesa": "#0ad9d8",    # acento positivo / métricas
@@ -534,6 +538,16 @@ with st.sidebar:
             <div class="marca-nombre">Proyecto 1</div>
             <div class="marca-sub">Python for Analytics</div>
           </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"""
+        <div style="background:#f17507;color:#fff;font-weight:800;
+                    font-size:0.95rem;text-align:center;padding:4px 0;
+                    border-radius:8px;margin:2px 0 10px 0;letter-spacing:.5px;">
+          {VERSION}
         </div>
         """,
         unsafe_allow_html=True,
@@ -1252,37 +1266,27 @@ def mostrar_ejercicio4():
                     """,
                     unsafe_allow_html=True
                 )
-                # CSS apuntado SOLO a este selector: fondo naranja de la paleta,
-                # letra más grande y en negrita (usa la clase st-key-<key>).
-                st.markdown(
-                    """
-                    <style>
-                    /* Caja del desplegable (control cerrado): fondo naranja */
-                    .st-key-sel_detalle_proyecto div[data-baseweb="select"] > div,
-                    .st-key-sel_detalle_proyecto div[data-baseweb="select"] > div > div {
-                        background-color: #f17507 !important;
-                        border-color: #cf480e !important;
-                        border-radius: 10px !important;
-                    }
-                    /* Texto del valor seleccionado: blanco, negrita y más grande */
-                    .st-key-sel_detalle_proyecto div[data-baseweb="select"] * {
-                        color: #ffffff !important;
-                        font-size: 1.25rem !important;
-                        font-weight: 800 !important;
-                    }
-                    .st-key-sel_detalle_proyecto div[data-baseweb="select"] svg {
-                        fill: #ffffff !important;
-                    }
-                    </style>
-                    """,
-                    unsafe_allow_html=True
-                )
                 seleccionado = st.selectbox(
                     "Ver detalle de:",
                     list(st.session_state.proyectos.keys()),
                     help="Selecciona un proyecto para ver sus indicadores.",
                     label_visibility="collapsed",
                     key="sel_detalle_proyecto"
+                )
+
+                # Chip naranja con el proyecto elegido (render HTML garantizado):
+                # fondo de contraste de la paleta, texto blanco, grande y en negrita.
+                st.markdown(
+                    f"""
+                    <div style="background:#f17507;border:2px solid #cf480e;
+                                border-radius:10px;padding:12px 20px;margin:6px 0 4px 0;
+                                box-shadow:0 3px 12px rgba(207,72,14,.25);">
+                      <span style="color:#ffffff;font-size:1.35rem;font-weight:800;">
+                        📌 {seleccionado}
+                      </span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
                 )
                 resumen = st.session_state.proyectos[seleccionado].resumen()
 
